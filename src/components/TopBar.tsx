@@ -1,8 +1,16 @@
-import { Coins, Droplet, Landmark, ScrollText } from "lucide-react";
+import { BarChart3, Coins, Droplet, Landmark, ScrollText, Sliders } from "lucide-react";
 import { useGame } from "../state/GameContext";
 import { fmtQuarterDate, fmtUsdBn } from "../utils/format";
 
-export function TopBar({ onOpenReforms }: { onOpenReforms: () => void }) {
+export function TopBar({
+  onOpenReforms,
+  onOpenPolicy,
+  onOpenCharts,
+}: {
+  onOpenReforms: () => void;
+  onOpenPolicy: () => void;
+  onOpenCharts: () => void;
+}) {
   const { state, dispatch } = useGame();
 
   const canAdvance = !state.gameOver && !state.activeEvent;
@@ -40,6 +48,26 @@ export function TopBar({ onOpenReforms }: { onOpenReforms: () => void }) {
           label="Нефть"
           value={`$${state.oilPrice.toFixed(1)}/барр.`}
         />
+
+        <button
+          type="button"
+          onClick={onOpenPolicy}
+          title="Политика"
+          aria-label="Политика"
+          className="rounded-md border border-slate-700 bg-slate-900 p-2 text-slate-300 transition hover:border-violet-500 hover:text-white"
+        >
+          <Sliders size={18} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenCharts}
+          title="Графики"
+          aria-label="Графики"
+          className="rounded-md border border-slate-700 bg-slate-900 p-2 text-slate-300 transition hover:border-violet-500 hover:text-white"
+        >
+          <BarChart3 size={18} />
+        </button>
 
         <button
           type="button"
