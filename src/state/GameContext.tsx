@@ -19,7 +19,7 @@ import type { IndustrySector } from "../engine/types";
 type Action =
   | { type: "NEXT_TURN" }
   | { type: "SET_SLIDER"; slider: keyof Sliders; value: number }
-  | { type: "BUILD_INDUSTRY"; sector: IndustrySector }
+  | { type: "BUILD_INDUSTRY"; sector: IndustrySector; regionId: string }
   | { type: "APPLY_REFORM"; reformId: string }
   | { type: "RESOLVE_EVENT_CHOICE"; choiceId: string }
   | { type: "NEW_GAME" }
@@ -35,7 +35,7 @@ function reducer(state: GameState, action: Action): GameState {
         sliders: { ...state.sliders, [action.slider]: action.value },
       };
     case "BUILD_INDUSTRY":
-      return startBuildingIndustry(state, action.sector);
+      return startBuildingIndustry(state, action.sector, action.regionId);
     case "APPLY_REFORM":
       return applyReform(state, action.reformId);
     case "RESOLVE_EVENT_CHOICE":

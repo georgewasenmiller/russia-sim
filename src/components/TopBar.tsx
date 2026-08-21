@@ -2,7 +2,7 @@ import { Coins, Droplet, Landmark, ScrollText } from "lucide-react";
 import { useGame } from "../state/GameContext";
 import { fmtQuarterDate, fmtUsdBn } from "../utils/format";
 
-export function TopBar() {
+export function TopBar({ onOpenReforms }: { onOpenReforms: () => void }) {
   const { state, dispatch } = useGame();
 
   const canAdvance = !state.gameOver && !state.activeEvent;
@@ -40,6 +40,15 @@ export function TopBar() {
           label="Нефть"
           value={`$${state.oilPrice.toFixed(1)}/барр.`}
         />
+
+        <button
+          type="button"
+          onClick={onOpenReforms}
+          className="flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-violet-500 hover:text-white"
+        >
+          <ScrollText size={16} className="text-violet-400" />
+          Реформы
+        </button>
 
         <button
           type="button"

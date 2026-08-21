@@ -4,24 +4,32 @@ import { TopBar } from "./components/TopBar";
 import { KpiCards } from "./components/Dashboard/KpiCards";
 import { HistoryCharts } from "./components/Charts/HistoryCharts";
 import { PolicyPanel } from "./components/Sliders/PolicyPanel";
-import { IndustryPanel } from "./components/Industries/IndustryPanel";
 import { ReformsPanel } from "./components/Reforms/ReformsPanel";
 import { EventModal } from "./components/Events/EventModal";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { GameOverScreen } from "./components/GameOverScreen";
-import { RegionsView } from "./regions/RegionsView";
+import { BottomDrawer } from "./components/BottomDrawer";
+import { RegionsMap } from "./regions/RegionsMap";
+import { RegionPanel } from "./regions/RegionPanel";
+import { REGIONS } from "./regions/data";
+import { gdpDomain, legendStops } from "./regions/colorScale";
 
-type Tab = "economy" | "regions";
+type SidePanel = { type: "region"; id: string } | { type: "reforms" } | null;
 
-function GameShell() {
+function MainScreen() {
   const { resetWarning, dismissResetWarning, started } = useGame();
+  const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   if (!started) return <NewGameScreen />;
 
+  const [min, max] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
+  const stops = legendStops(min, max);
+
   return (
-    <div className="bg-slate-950">
+    <div className="flex h-svh flex-col overflow-hidden bg-slate-950">
       {resetWarning && (
-        <div className="flex items-center justify-between gap-3 bg-amber-900/60 px-4 py-2 text-sm text-amber-200">
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-amber-900/60 px-4 py-2 text-sm text-amber-200">
           <span>
             Старое сохранение несовместимо с текущей версией игры и было
             сброшено. Начата новая игра.
@@ -36,17 +44,57 @@ function GameShell() {
         </div>
       )}
 
-      <TopBar />
+      <div className="shrink-0">
+        <TopBar onOpenReforms={() => setSidePanel({ type: "reforms" })} />
+      </div>
 
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
+      <div className="shrink-0 p-4 pb-0">
         <KpiCards />
-        <HistoryCharts />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <PolicyPanel />
-          <IndustryPanel />
-          <ReformsPanel />
+      </div>
+
+      <div className="flex min-h-0 flex-1 gap-4 p-4">
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+            <RegionsMap
+              selectedId={sidePanel?.type === "region" ? sidePanel.id : null}
+              onSelect={(id) => setSidePanel({ type: "region", id })}
+            />
+            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+              <span>ВВП-индекс:</span>
+              <div className="flex h-3 flex-1 overflow-hidden rounded">
+                {stops.map((stop, i) => (
+                  <div key={i} className="flex-1" style={{ background: stop.color }} />
+                ))}
+              </div>
+              <span>{min.toFixed(0)}</span>
+              <span>—</span>
+              <span>{max.toFixed(0)}</span>
+            </div>
+          </div>
         </div>
-      </main>
+
+        {sidePanel && (
+          <aside className="w-80 shrink-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/95">
+            {sidePanel.type === "region" ? (
+              <RegionPanel
+                selectedId={sidePanel.id}
+                onClose={() => setSidePanel(null)}
+              />
+            ) : (
+              <ReformsPanel onClose={() => setSidePanel(null)} />
+            )}
+          </aside>
+        )}
+      </div>
+
+      <div className="h-10 shrink-0" aria-hidden="true" />
+
+      <BottomDrawer open={drawerOpen} onToggle={() => setDrawerOpen((o) => !o)}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <PolicyPanel />
+          <HistoryCharts />
+        </div>
+      </BottomDrawer>
 
       <EventModal />
       <GameOverScreen />
@@ -54,46 +102,10 @@ function GameShell() {
   );
 }
 
-function TabNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "economy", label: "Экономика" },
-    { id: "regions", label: "Регионы" },
-  ];
-  return (
-    <div className="flex gap-1 border-b border-slate-800 bg-slate-950 px-4 pt-2">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={`rounded-t-md px-4 py-2 text-sm font-medium transition ${
-            tab === t.id
-              ? "bg-slate-900 text-slate-100"
-              : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function AppShell() {
-  const [tab, setTab] = useState<Tab>("economy");
-
-  return (
-    <div className="min-h-svh bg-slate-950">
-      <TabNav tab={tab} onChange={setTab} />
-      {tab === "economy" ? <GameShell /> : <RegionsView />}
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <GameProvider>
-      <AppShell />
+      <MainScreen />
     </GameProvider>
   );
 }

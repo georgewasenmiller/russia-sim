@@ -21,6 +21,7 @@ export interface IndustryDef {
 
 export interface Industry {
   id: string;
+  regionId: string;
   sector: IndustrySector;
   label: string;
   status: "building" | "operational";

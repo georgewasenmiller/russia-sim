@@ -1,6 +1,6 @@
 import type { GameState, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {

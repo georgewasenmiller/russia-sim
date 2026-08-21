@@ -9,15 +9,24 @@ const CATEGORY_LABEL: Record<string, string> = {
   foreign: "Внешнеполитические",
 };
 
-export function ReformsPanel() {
+export function ReformsPanel({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useGame();
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
-        <ScrollText size={16} /> Реформы
-      </h3>
-      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pr-1">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+          <ScrollText size={18} /> Реформы
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="flex flex-col gap-2">
         {REFORM_DEFS.map((reform) => {
           const applied = state.appliedReformIds.includes(reform.id);
           const canApply = !applied && canApplyReform(state, reform);

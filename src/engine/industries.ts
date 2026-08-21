@@ -14,6 +14,7 @@ export function canAffordIndustry(
 export function startBuildingIndustry(
   state: GameState,
   sector: IndustrySector,
+  regionId: string,
 ): GameState {
   const def = INDUSTRY_DEFS[sector];
   if (!canAffordIndustry(state, sector)) return state;
@@ -21,6 +22,7 @@ export function startBuildingIndustry(
   industryCounter += 1;
   const industry: Industry = {
     id: `ind-${state.turn}-${industryCounter}`,
+    regionId,
     sector: def.sector,
     label: def.label,
     status: "building",
