@@ -21,7 +21,7 @@ export const REGIONS: Region[] = [
     population: 6.6,
     unemploymentRate: 8,
     corruptionIndex: 68,
-    neighbors: ["moscow"],
+    neighbors: ["tver", "smolensk", "yaroslavl", "vladimir", "ryazan", "tula", "kaluga", "moscow"],
   },
   {
     id: "spb",
@@ -32,7 +32,7 @@ export const REGIONS: Region[] = [
     population: 4.7,
     unemploymentRate: 7,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["leningrad_oblast"],
   },
   {
     id: "khanty_mansi",
@@ -43,7 +43,7 @@ export const REGIONS: Region[] = [
     population: 1.4,
     unemploymentRate: 7,
     corruptionIndex: 58,
-    neighbors: ["yamalo_nenets", "sverdlovsk", "krasnoyarsk"],
+    neighbors: ["yamalo_nenets", "krasnoyarsk", "tyumen_south", "tomsk", "sverdlovsk", "komi"],
   },
   {
     id: "yamalo_nenets",
@@ -54,7 +54,7 @@ export const REGIONS: Region[] = [
     population: 0.5,
     unemploymentRate: 6,
     corruptionIndex: 55,
-    neighbors: ["khanty_mansi", "krasnoyarsk"],
+    neighbors: ["nenets", "komi", "khanty_mansi", "krasnoyarsk"],
   },
   {
     id: "sverdlovsk",
@@ -65,7 +65,7 @@ export const REGIONS: Region[] = [
     population: 4.5,
     unemploymentRate: 11,
     corruptionIndex: 60,
-    neighbors: ["perm", "khanty_mansi", "chelyabinsk", "bashkortostan"],
+    neighbors: ["perm", "komi", "khanty_mansi", "tyumen_south", "kurgan", "chelyabinsk", "bashkortostan"],
   },
   {
     id: "tatarstan",
@@ -76,7 +76,7 @@ export const REGIONS: Region[] = [
     population: 3.8,
     unemploymentRate: 9,
     corruptionIndex: 62,
-    neighbors: ["bashkortostan", "samara"],
+    neighbors: ["bashkortostan", "udmurtia", "mari_el", "chuvashia", "kirov", "orenburg", "ulyanovsk", "samara"],
   },
   {
     id: "kemerovo",
@@ -87,7 +87,7 @@ export const REGIONS: Region[] = [
     population: 2.9,
     unemploymentRate: 14,
     corruptionIndex: 63,
-    neighbors: ["novosibirsk", "krasnoyarsk"],
+    neighbors: ["tomsk", "novosibirsk", "altai_krai", "altai_republic", "krasnoyarsk", "khakassia"],
   },
   {
     id: "krasnodar",
@@ -98,7 +98,7 @@ export const REGIONS: Region[] = [
     population: 5.1,
     unemploymentRate: 10,
     corruptionIndex: 66,
-    neighbors: ["rostov"],
+    neighbors: ["rostov", "stavropol", "karachay_cherkessia", "adygea"],
   },
   {
     id: "rostov",
@@ -109,7 +109,7 @@ export const REGIONS: Region[] = [
     population: 4.4,
     unemploymentRate: 12,
     corruptionIndex: 60,
-    neighbors: ["krasnodar", "volgograd"],
+    neighbors: ["voronezh", "volgograd", "krasnodar", "stavropol", "kalmykia"],
   },
   {
     id: "krasnoyarsk",
@@ -120,7 +120,7 @@ export const REGIONS: Region[] = [
     population: 3.0,
     unemploymentRate: 11,
     corruptionIndex: 58,
-    neighbors: ["yamalo_nenets", "khanty_mansi", "kemerovo", "irkutsk", "sakha"],
+    neighbors: ["sakha", "irkutsk", "tuva", "khakassia", "kemerovo", "tomsk", "khanty_mansi", "yamalo_nenets"],
   },
   {
     id: "primorye",
@@ -131,7 +131,7 @@ export const REGIONS: Region[] = [
     population: 2.1,
     unemploymentRate: 13,
     corruptionIndex: 68,
-    neighbors: [],
+    neighbors: ["khabarovsk"],
   },
   {
     id: "bashkortostan",
@@ -142,7 +142,7 @@ export const REGIONS: Region[] = [
     population: 4.1,
     unemploymentRate: 10,
     corruptionIndex: 63,
-    neighbors: ["tatarstan", "sverdlovsk", "perm", "chelyabinsk"],
+    neighbors: ["perm", "sverdlovsk", "chelyabinsk", "orenburg", "tatarstan", "udmurtia"],
   },
   {
     id: "samara",
@@ -153,7 +153,7 @@ export const REGIONS: Region[] = [
     population: 3.2,
     unemploymentRate: 10,
     corruptionIndex: 58,
-    neighbors: ["tatarstan"],
+    neighbors: ["saratov", "ulyanovsk", "orenburg", "tatarstan"],
   },
   {
     id: "nizhny_novgorod",
@@ -164,7 +164,7 @@ export const REGIONS: Region[] = [
     population: 3.6,
     unemploymentRate: 11,
     corruptionIndex: 56,
-    neighbors: [],
+    neighbors: ["kostroma", "kirov", "mari_el", "chuvashia", "mordovia", "ryazan", "vladimir", "ivanovo"],
   },
   {
     id: "chelyabinsk",
@@ -175,7 +175,7 @@ export const REGIONS: Region[] = [
     population: 3.6,
     unemploymentRate: 12,
     corruptionIndex: 57,
-    neighbors: ["sverdlovsk", "bashkortostan"],
+    neighbors: ["sverdlovsk", "kurgan", "orenburg", "bashkortostan"],
   },
   {
     id: "perm",
@@ -186,7 +186,7 @@ export const REGIONS: Region[] = [
     population: 2.8,
     unemploymentRate: 11,
     corruptionIndex: 55,
-    neighbors: ["sverdlovsk", "bashkortostan"],
+    neighbors: ["komi", "kirov", "udmurtia", "bashkortostan", "sverdlovsk"],
   },
   {
     id: "irkutsk",
@@ -197,7 +197,7 @@ export const REGIONS: Region[] = [
     population: 2.6,
     unemploymentRate: 13,
     corruptionIndex: 60,
-    neighbors: ["krasnoyarsk", "sakha"],
+    neighbors: ["krasnoyarsk", "sakha", "zabaykalsky", "buryatia", "tuva"],
   },
   {
     id: "volgograd",
@@ -208,7 +208,7 @@ export const REGIONS: Region[] = [
     population: 2.7,
     unemploymentRate: 12,
     corruptionIndex: 59,
-    neighbors: ["rostov"],
+    neighbors: ["saratov", "voronezh", "rostov", "astrakhan", "kalmykia"],
   },
   {
     id: "belgorod",
@@ -219,7 +219,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 9,
     corruptionIndex: 50,
-    neighbors: [],
+    neighbors: ["kursk", "voronezh"],
   },
   {
     id: "lipetsk",
@@ -230,7 +230,7 @@ export const REGIONS: Region[] = [
     population: 1.2,
     unemploymentRate: 9,
     corruptionIndex: 50,
-    neighbors: [],
+    neighbors: ["kursk", "oryol", "tula", "ryazan", "tambov", "voronezh"],
   },
   {
     id: "murmansk",
@@ -241,7 +241,7 @@ export const REGIONS: Region[] = [
     population: 0.9,
     unemploymentRate: 12,
     corruptionIndex: 52,
-    neighbors: [],
+    neighbors: ["karelia", "arkhangelsk"],
   },
   {
     id: "sakha",
@@ -252,7 +252,7 @@ export const REGIONS: Region[] = [
     population: 0.95,
     unemploymentRate: 10,
     corruptionIndex: 60,
-    neighbors: ["krasnoyarsk", "irkutsk"],
+    neighbors: ["krasnoyarsk", "irkutsk", "amur", "zabaykalsky", "khabarovsk", "magadan", "chukotka"],
   },
   {
     id: "novosibirsk",
@@ -263,7 +263,7 @@ export const REGIONS: Region[] = [
     population: 2.7,
     unemploymentRate: 11,
     corruptionIndex: 54,
-    neighbors: ["kemerovo"],
+    neighbors: ["tomsk", "omsk", "altai_krai", "kemerovo"],
   },
 
   // Остальные ~59 субъектов РФ — грубее откалиброванные, но правдоподобные
@@ -278,7 +278,7 @@ export const REGIONS: Region[] = [
     population: 0.45,
     unemploymentRate: 14,
     corruptionIndex: 60,
-    neighbors: [],
+    neighbors: ["krasnodar"],
   },
   {
     id: "altai_republic",
@@ -289,7 +289,7 @@ export const REGIONS: Region[] = [
     population: 0.2,
     unemploymentRate: 18,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["altai_krai", "kemerovo", "khakassia", "tuva"],
   },
   {
     id: "altai_krai",
@@ -300,7 +300,7 @@ export const REGIONS: Region[] = [
     population: 2.6,
     unemploymentRate: 12,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["novosibirsk", "kemerovo", "altai_republic"],
   },
   {
     id: "amur",
@@ -311,7 +311,7 @@ export const REGIONS: Region[] = [
     population: 0.9,
     unemploymentRate: 12,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["sakha", "khabarovsk", "jewish_ao", "zabaykalsky"],
   },
   {
     id: "arkhangelsk",
@@ -322,7 +322,7 @@ export const REGIONS: Region[] = [
     population: 1.4,
     unemploymentRate: 11,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["karelia", "murmansk", "vologda", "kirov", "nenets", "komi"],
   },
   {
     id: "astrakhan",
@@ -333,7 +333,7 @@ export const REGIONS: Region[] = [
     population: 1.0,
     unemploymentRate: 11,
     corruptionIndex: 57,
-    neighbors: [],
+    neighbors: ["volgograd", "kalmykia"],
   },
   {
     id: "bryansk",
@@ -344,7 +344,7 @@ export const REGIONS: Region[] = [
     population: 1.4,
     unemploymentRate: 11,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["smolensk", "kaluga", "oryol", "kursk"],
   },
   {
     id: "buryatia",
@@ -355,7 +355,7 @@ export const REGIONS: Region[] = [
     population: 1.0,
     unemploymentRate: 14,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["irkutsk", "zabaykalsky", "tuva"],
   },
   {
     id: "vladimir",
@@ -366,7 +366,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 10,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["moscow_oblast", "ryazan", "nizhny_novgorod", "ivanovo", "yaroslavl"],
   },
   {
     id: "vologda",
@@ -377,7 +377,7 @@ export const REGIONS: Region[] = [
     population: 1.3,
     unemploymentRate: 9,
     corruptionIndex: 52,
-    neighbors: [],
+    neighbors: ["arkhangelsk", "kirov", "kostroma", "yaroslavl", "tver", "novgorod", "leningrad_oblast", "karelia"],
   },
   {
     id: "voronezh",
@@ -388,7 +388,7 @@ export const REGIONS: Region[] = [
     population: 2.4,
     unemploymentRate: 10,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["belgorod", "kursk", "lipetsk", "tambov", "saratov", "volgograd", "rostov"],
   },
   {
     id: "dagestan",
@@ -399,7 +399,7 @@ export const REGIONS: Region[] = [
     population: 2.6,
     unemploymentRate: 22,
     corruptionIndex: 70,
-    neighbors: [],
+    neighbors: ["chechnya", "stavropol", "kalmykia"],
   },
   {
     id: "jewish_ao",
@@ -410,7 +410,7 @@ export const REGIONS: Region[] = [
     population: 0.19,
     unemploymentRate: 15,
     corruptionIndex: 60,
-    neighbors: [],
+    neighbors: ["amur", "khabarovsk"],
   },
   {
     id: "zabaykalsky",
@@ -421,7 +421,7 @@ export const REGIONS: Region[] = [
     population: 1.2,
     unemploymentRate: 14,
     corruptionIndex: 60,
-    neighbors: [],
+    neighbors: ["amur", "irkutsk", "buryatia", "sakha"],
   },
   {
     id: "ivanovo",
@@ -432,7 +432,7 @@ export const REGIONS: Region[] = [
     population: 1.2,
     unemploymentRate: 13,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["vladimir", "yaroslavl", "nizhny_novgorod", "kostroma"],
   },
   {
     id: "ingushetia",
@@ -443,7 +443,7 @@ export const REGIONS: Region[] = [
     population: 0.47,
     unemploymentRate: 35,
     corruptionIndex: 72,
-    neighbors: [],
+    neighbors: ["north_ossetia", "chechnya"],
   },
   {
     id: "kabardino_balkaria",
@@ -454,7 +454,7 @@ export const REGIONS: Region[] = [
     population: 0.9,
     unemploymentRate: 20,
     corruptionIndex: 65,
-    neighbors: [],
+    neighbors: ["stavropol", "karachay_cherkessia", "north_ossetia"],
   },
   {
     id: "kaliningrad",
@@ -476,7 +476,7 @@ export const REGIONS: Region[] = [
     population: 1.0,
     unemploymentRate: 10,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["moscow_oblast", "tula", "bryansk", "smolensk", "oryol"],
   },
   {
     id: "kamchatka",
@@ -487,7 +487,7 @@ export const REGIONS: Region[] = [
     population: 0.37,
     unemploymentRate: 13,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["chukotka", "magadan"],
   },
   {
     id: "karachay_cherkessia",
@@ -498,7 +498,7 @@ export const REGIONS: Region[] = [
     population: 0.44,
     unemploymentRate: 22,
     corruptionIndex: 64,
-    neighbors: [],
+    neighbors: ["krasnodar", "stavropol", "kabardino_balkaria"],
   },
   {
     id: "kirov",
@@ -509,7 +509,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 12,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["perm", "udmurtia", "komi", "arkhangelsk", "vologda", "kostroma", "nizhny_novgorod", "mari_el", "tatarstan"],
   },
   {
     id: "kostroma",
@@ -520,7 +520,7 @@ export const REGIONS: Region[] = [
     population: 0.75,
     unemploymentRate: 11,
     corruptionIndex: 52,
-    neighbors: [],
+    neighbors: ["ivanovo", "yaroslavl", "vologda", "kirov", "nizhny_novgorod"],
   },
   {
     id: "kurgan",
@@ -531,7 +531,7 @@ export const REGIONS: Region[] = [
     population: 1.05,
     unemploymentRate: 13,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["chelyabinsk", "sverdlovsk", "tyumen_south"],
   },
   {
     id: "kursk",
@@ -542,7 +542,7 @@ export const REGIONS: Region[] = [
     population: 1.3,
     unemploymentRate: 10,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["bryansk", "oryol", "lipetsk", "voronezh", "belgorod"],
   },
   {
     id: "leningrad_oblast",
@@ -553,7 +553,7 @@ export const REGIONS: Region[] = [
     population: 1.6,
     unemploymentRate: 8,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["spb", "novgorod", "pskov", "vologda", "karelia"],
   },
   {
     id: "magadan",
@@ -564,7 +564,7 @@ export const REGIONS: Region[] = [
     population: 0.2,
     unemploymentRate: 15,
     corruptionIndex: 60,
-    neighbors: [],
+    neighbors: ["sakha", "chukotka", "kamchatka", "khabarovsk"],
   },
   {
     id: "mari_el",
@@ -575,7 +575,7 @@ export const REGIONS: Region[] = [
     population: 0.73,
     unemploymentRate: 13,
     corruptionIndex: 56,
-    neighbors: [],
+    neighbors: ["kirov", "nizhny_novgorod", "chuvashia", "tatarstan"],
   },
   {
     id: "nenets",
@@ -586,7 +586,7 @@ export const REGIONS: Region[] = [
     population: 0.042,
     unemploymentRate: 8,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["komi", "arkhangelsk", "yamalo_nenets"],
   },
   {
     id: "novgorod",
@@ -597,7 +597,7 @@ export const REGIONS: Region[] = [
     population: 0.7,
     unemploymentRate: 10,
     corruptionIndex: 52,
-    neighbors: [],
+    neighbors: ["pskov", "tver", "leningrad_oblast", "vologda"],
   },
   {
     id: "omsk",
@@ -608,7 +608,7 @@ export const REGIONS: Region[] = [
     population: 2.1,
     unemploymentRate: 11,
     corruptionIndex: 56,
-    neighbors: [],
+    neighbors: ["tyumen_south", "novosibirsk", "tomsk"],
   },
   {
     id: "orenburg",
@@ -619,7 +619,7 @@ export const REGIONS: Region[] = [
     population: 2.2,
     unemploymentRate: 10,
     corruptionIndex: 57,
-    neighbors: [],
+    neighbors: ["samara", "tatarstan", "bashkortostan", "chelyabinsk"],
   },
   {
     id: "oryol",
@@ -630,7 +630,7 @@ export const REGIONS: Region[] = [
     population: 0.85,
     unemploymentRate: 11,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["kursk", "bryansk", "kaluga", "tula", "lipetsk"],
   },
   {
     id: "penza",
@@ -641,7 +641,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 11,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["saratov", "tambov", "ulyanovsk", "mordovia", "ryazan"],
   },
   {
     id: "pskov",
@@ -652,7 +652,7 @@ export const REGIONS: Region[] = [
     population: 0.78,
     unemploymentRate: 12,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["leningrad_oblast", "novgorod", "tver", "smolensk"],
   },
   {
     id: "kalmykia",
@@ -663,7 +663,7 @@ export const REGIONS: Region[] = [
     population: 0.3,
     unemploymentRate: 20,
     corruptionIndex: 62,
-    neighbors: [],
+    neighbors: ["stavropol", "dagestan", "volgograd", "astrakhan", "rostov"],
   },
   {
     id: "karelia",
@@ -674,7 +674,7 @@ export const REGIONS: Region[] = [
     population: 0.72,
     unemploymentRate: 12,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["leningrad_oblast", "vologda", "murmansk", "arkhangelsk"],
   },
   {
     id: "komi",
@@ -685,7 +685,7 @@ export const REGIONS: Region[] = [
     population: 1.1,
     unemploymentRate: 10,
     corruptionIndex: 56,
-    neighbors: [],
+    neighbors: ["nenets", "arkhangelsk", "kirov", "perm", "sverdlovsk", "yamalo_nenets", "khanty_mansi"],
   },
   {
     id: "mordovia",
@@ -696,7 +696,7 @@ export const REGIONS: Region[] = [
     population: 0.9,
     unemploymentRate: 11,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["ulyanovsk", "penza", "ryazan", "nizhny_novgorod", "chuvashia"],
   },
   {
     id: "khakassia",
@@ -707,7 +707,7 @@ export const REGIONS: Region[] = [
     population: 0.58,
     unemploymentRate: 12,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["krasnoyarsk", "tuva", "altai_republic", "kemerovo"],
   },
   {
     id: "ryazan",
@@ -718,7 +718,7 @@ export const REGIONS: Region[] = [
     population: 1.2,
     unemploymentRate: 10,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["vladimir", "nizhny_novgorod", "mordovia", "penza", "tambov", "lipetsk", "tula", "moscow_oblast"],
   },
   {
     id: "saratov",
@@ -729,7 +729,7 @@ export const REGIONS: Region[] = [
     population: 2.7,
     unemploymentRate: 11,
     corruptionIndex: 56,
-    neighbors: [],
+    neighbors: ["samara", "ulyanovsk", "penza", "voronezh", "tambov", "volgograd"],
   },
   {
     id: "sakhalin",
@@ -751,7 +751,7 @@ export const REGIONS: Region[] = [
     population: 0.7,
     unemploymentRate: 18,
     corruptionIndex: 62,
-    neighbors: [],
+    neighbors: ["kabardino_balkaria", "stavropol", "ingushetia", "chechnya"],
   },
   {
     id: "smolensk",
@@ -762,7 +762,7 @@ export const REGIONS: Region[] = [
     population: 1.0,
     unemploymentRate: 11,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["pskov", "tver", "moscow_oblast", "kaluga", "bryansk"],
   },
   {
     id: "stavropol",
@@ -773,7 +773,7 @@ export const REGIONS: Region[] = [
     population: 2.7,
     unemploymentRate: 13,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["dagestan", "kabardino_balkaria", "kalmykia", "karachay_cherkessia", "north_ossetia", "chechnya", "krasnodar", "rostov"],
   },
   {
     id: "tambov",
@@ -784,7 +784,7 @@ export const REGIONS: Region[] = [
     population: 1.2,
     unemploymentRate: 11,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["ryazan", "penza", "saratov", "voronezh", "lipetsk"],
   },
   {
     id: "tver",
@@ -795,7 +795,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 10,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["moscow_oblast", "yaroslavl", "vologda", "novgorod", "smolensk", "pskov"],
   },
   {
     id: "tomsk",
@@ -806,7 +806,7 @@ export const REGIONS: Region[] = [
     population: 1.0,
     unemploymentRate: 10,
     corruptionIndex: 54,
-    neighbors: [],
+    neighbors: ["omsk", "tyumen_south", "khanty_mansi", "krasnoyarsk", "kemerovo", "novosibirsk"],
   },
   {
     id: "tula",
@@ -817,7 +817,7 @@ export const REGIONS: Region[] = [
     population: 1.7,
     unemploymentRate: 10,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["oryol", "kaluga", "moscow_oblast", "ryazan", "lipetsk"],
   },
   {
     id: "tuva",
@@ -828,7 +828,7 @@ export const REGIONS: Region[] = [
     population: 0.31,
     unemploymentRate: 22,
     corruptionIndex: 62,
-    neighbors: [],
+    neighbors: ["buryatia", "irkutsk", "krasnoyarsk", "khakassia", "altai_republic"],
   },
   {
     id: "tyumen_south",
@@ -839,7 +839,7 @@ export const REGIONS: Region[] = [
     population: 1.3,
     unemploymentRate: 9,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["sverdlovsk", "kurgan", "omsk", "tomsk", "khanty_mansi"],
   },
   {
     id: "udmurtia",
@@ -850,7 +850,7 @@ export const REGIONS: Region[] = [
     population: 1.6,
     unemploymentRate: 10,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["kirov", "perm", "bashkortostan", "tatarstan"],
   },
   {
     id: "ulyanovsk",
@@ -861,7 +861,7 @@ export const REGIONS: Region[] = [
     population: 1.4,
     unemploymentRate: 10,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["samara", "saratov", "penza", "mordovia", "chuvashia", "tatarstan"],
   },
   {
     id: "khabarovsk",
@@ -872,7 +872,7 @@ export const REGIONS: Region[] = [
     population: 1.5,
     unemploymentRate: 10,
     corruptionIndex: 58,
-    neighbors: [],
+    neighbors: ["primorye", "jewish_ao", "sakha", "magadan", "amur"],
   },
   {
     id: "chechnya",
@@ -883,7 +883,7 @@ export const REGIONS: Region[] = [
     population: 1.1,
     unemploymentRate: 30,
     corruptionIndex: 70,
-    neighbors: [],
+    neighbors: ["dagestan", "ingushetia", "north_ossetia", "stavropol"],
   },
   {
     id: "chuvashia",
@@ -894,7 +894,7 @@ export const REGIONS: Region[] = [
     population: 1.3,
     unemploymentRate: 11,
     corruptionIndex: 55,
-    neighbors: [],
+    neighbors: ["nizhny_novgorod", "mordovia", "ulyanovsk", "tatarstan", "mari_el"],
   },
   {
     id: "chukotka",
@@ -905,7 +905,7 @@ export const REGIONS: Region[] = [
     population: 0.06,
     unemploymentRate: 16,
     corruptionIndex: 65,
-    neighbors: [],
+    neighbors: ["sakha", "magadan", "kamchatka"],
   },
   {
     id: "yaroslavl",
@@ -916,6 +916,6 @@ export const REGIONS: Region[] = [
     population: 1.4,
     unemploymentRate: 9,
     corruptionIndex: 53,
-    neighbors: [],
+    neighbors: ["vologda", "moscow_oblast", "vladimir", "tver", "kostroma", "ivanovo"],
   },
 ];
