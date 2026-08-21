@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { geoConicEqualArea, geoPath } from "d3-geo";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import geoData from "./geo/russia-regions.geo.json";
+import geoData from "./geo/russia-all.geo.json";
 import { REGIONS } from "./data";
 import { gdpColor, gdpDomain } from "./colorScale";
 
@@ -22,49 +22,48 @@ export function RegionsMap({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
-  const { path, featuresById, missingRegionNames } = useMemo(() => {
-    const projection = geoConicEqualArea()
-      .rotate([-100, 0])
-      .parallels([50, 70])
-      .fitSize([WIDTH, HEIGHT], featureCollection);
-    const pathGen = geoPath(projection);
+  const { path, gameFeatures, backgroundFeatures, missing } = useMemo(() => {
+      // fitSize по bbox ВСЕХ ~83 субъектов (не только игровых 24) — иначе
+      // масштаб/положение зависят от того, какое подмножество выбрано, и
+      // силуэт страны на карте искажается.
+      const projection = geoConicEqualArea()
+        .rotate([-100, 0])
+        .parallels([50, 70])
+        .fitSize([WIDTH, HEIGHT], featureCollection);
+      const pathGen = geoPath(projection);
 
-    const byGeoName = new Map<string, Feature<Geometry, RegionProperties>>();
-    for (const feature of featureCollection.features) {
-      byGeoName.set(feature.properties.name, feature);
-    }
-
-    const byId = new Map<string, Feature<Geometry, RegionProperties>>();
-    const missing: string[] = [];
-    for (const region of REGIONS) {
-      const feature = byGeoName.get(region.geoName);
-      if (feature) {
-        byId.set(region.id, feature);
-        byGeoName.delete(region.geoName);
-      } else {
-        missing.push(`${region.name} (geoName: "${region.geoName}")`);
+      const byGeoName = new Map<string, Feature<Geometry, RegionProperties>>();
+      for (const feature of featureCollection.features) {
+        byGeoName.set(feature.properties.name, feature);
       }
-    }
-    // Оставшиеся в byGeoName — фичи geojson без соответствующего Region
-    const unmatchedFeatures = [...byGeoName.keys()];
 
-    return {
-      path: pathGen,
-      featuresById: byId,
-      missingRegionNames: { missing, unmatchedFeatures },
-    };
-  }, []);
+      const gameById = new Map<string, Feature<Geometry, RegionProperties>>();
+      const missingRegions: string[] = [];
+      for (const region of REGIONS) {
+        const feature = byGeoName.get(region.geoName);
+        if (feature) {
+          gameById.set(region.id, feature);
+          byGeoName.delete(region.geoName);
+        } else {
+          missingRegions.push(`${region.name} (geoName: "${region.geoName}")`);
+        }
+      }
+      // Оставшееся в byGeoName — субъекты РФ вне нашего игрового списка:
+      // фон силуэта страны, без интерактивности.
+      const background = [...byGeoName.values()];
 
-  if (missingRegionNames.missing.length > 0) {
+      return {
+        path: pathGen,
+        gameFeatures: gameById,
+        backgroundFeatures: background,
+        missing: missingRegions,
+      };
+    }, []);
+
+  if (missing.length > 0) {
     console.warn(
       "[RegionsMap] Регионы без геометрии (не найден geoName в geojson):",
-      missingRegionNames.missing,
-    );
-  }
-  if (missingRegionNames.unmatchedFeatures.length > 0) {
-    console.warn(
-      "[RegionsMap] Фичи geojson без соответствующего Region:",
-      missingRegionNames.unmatchedFeatures,
+      missing,
     );
   }
 
@@ -77,8 +76,25 @@ export function RegionsMap({
       role="img"
       aria-label="Карта регионов России"
     >
+      <g aria-hidden="true">
+        {backgroundFeatures.map((feature) => {
+          const d = path(feature);
+          if (!d) return null;
+          return (
+            <path
+              key={feature.properties.name}
+              d={d}
+              fill="#232838"
+              stroke="#0b0e14"
+              strokeWidth={0.5}
+              className="pointer-events-none"
+            />
+          );
+        })}
+      </g>
+
       {REGIONS.map((region) => {
-        const feature = featuresById.get(region.id);
+        const feature = gameFeatures.get(region.id);
         if (!feature) return null;
         const d = path(feature);
         if (!d) return null;
