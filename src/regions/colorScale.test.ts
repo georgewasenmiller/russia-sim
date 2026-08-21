@@ -20,20 +20,20 @@ describe("colorScale", () => {
     const [min, max] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
     const spb = REGIONS.find((r) => r.id === "spb")!;
     const khantyMansi = REGIONS.find((r) => r.id === "khanty_mansi")!;
-    const lipetsk = REGIONS.find((r) => r.id === "lipetsk")!;
+    const lowest = REGIONS.reduce((a, b) => (a.gdpIndex <= b.gdpIndex ? a : b));
 
     const spbT = normalizeGdp(spb.gdpIndex, min, max);
-    const lipetskT = normalizeGdp(lipetsk.gdpIndex, min, max);
+    const lowestT = normalizeGdp(lowest.gdpIndex, min, max);
     const khmT = normalizeGdp(khantyMansi.gdpIndex, min, max);
 
-    // На линейной шкале spb (42) и lipetsk (11) относительно Москвы (100) дали бы
-    // t=0.35 и t=0.0 — на sqrt-шкале разрыв между разными регионами должен быть
-    // заметно больше нуля и не совпадать друг с другом.
+    // На линейной шкале spb (42) относительно Москвы (100) и минимального
+    // региона дал бы t~0.35 — на sqrt-шкале разрыв между разными регионами
+    // должен быть заметно больше нуля и не совпадать друг с другом.
     expect(spbT).toBeGreaterThan(0.3);
-    expect(lipetskT).toBeCloseTo(0, 5);
+    expect(lowestT).toBeCloseTo(0, 5);
     expect(Math.abs(spbT - khmT)).toBeGreaterThan(0.05);
     expect(gdpColor(spb.gdpIndex, min, max)).not.toBe(
-      gdpColor(lipetsk.gdpIndex, min, max),
+      gdpColor(lowest.gdpIndex, min, max),
     );
   });
 
