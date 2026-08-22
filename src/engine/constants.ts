@@ -121,6 +121,20 @@ export const TUNING = {
     ambientDriftMultiplier: 0.3, // фоновый дрейф для остальных регионов
     noiseStdDev: 0.4, // независимый локальный дрейф между реформами
   },
+  // Торговля излишками сырья между соседними регионами
+  trade: {
+    perResourceCoefficient: 0.015, // п.п. роста на единицу gdpIndex лучшего соседа-поставщика
+    maxTotalBonus: 2.5, // жёсткий потолок суммарного бонуса по всем типам сырья сразу
+  },
+  // Миграция рабочей силы между соседями
+  migration: {
+    gapThreshold: 2, // п.п. разницы безработицы, ниже которого перетока нет
+    rate: 0.06, // доля превышения порога, перетекающая за один ход
+    maxPerNeighborDelta: 0.5, // кламп потока с одним соседом за ход, п.п.
+    maxTotalDeltaPerTurn: 1.2, // кламп суммарного эффекта на регион за ход, п.п.
+    shortageAbsorptionFactor: 0.5, // приток снижает безработицу реципиента при дефиците кадров
+    dilutionFactor: 0.4, // приток слегка повышает безработицу реципиента без дефицита
+  },
 };
 
 /**
@@ -134,6 +148,7 @@ export const GDP_INDEX_SCALE =
   100 / REGIONS.reduce((sum, r) => sum + r.gdpIndex, 0);
 
 const TOTAL_POPULATION = REGIONS.reduce((sum, r) => sum + r.population, 0);
+export const AVG_REGION_POPULATION = TOTAL_POPULATION / REGIONS.length;
 
 export function aggregateGdpIndex(
   economies: Record<string, RegionEconomy>,

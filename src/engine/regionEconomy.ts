@@ -1,4 +1,4 @@
-import { CLAMP, TUNING, clamp } from "./constants";
+import { AVG_REGION_POPULATION, CLAMP, TUNING, clamp } from "./constants";
 import {
   gaussianNoise,
   potentialGrowth,
@@ -6,12 +6,10 @@ import {
   sumModifier,
 } from "./formulas";
 import { totalOperationalOutput } from "./industries";
+import { computeMigrationDeltas, tradeGrowthBonus } from "./regionLinks";
 import type { GameState, Industry } from "./types";
 import { REGIONS } from "../regions/data";
 import type { Region, RegionEconomy } from "../regions/types";
-
-const AVG_REGION_POPULATION =
-  REGIONS.reduce((sum, r) => sum + r.population, 0) / REGIONS.length;
 
 function isOilOrGas(region: Region): boolean {
   return (
@@ -68,6 +66,11 @@ export function nextRegionGrowth(
       (oilPrice - state.oilPriceMeanTarget)
     : 0;
 
+  // Торговля излишками сырья: соседи считаются по снимку на начало хода
+  // (state.regionEconomies ещё не тронут этим ходом), так что бонус не
+  // зависит от порядка обработки регионов в advanceRegionEconomies.
+  const tradeBonus = tradeGrowthBonus(region, state.regionEconomies);
+
   const reformModifier =
     sumModifier(state, "gdpGrowthRateAnnual") *
     (isAgriculture(region) ? TUNING.regionGrowth.agricultureReformDamping : 1);
@@ -85,6 +88,7 @@ export function nextRegionGrowth(
     corruptionDrag +
     industryBoost +
     oilSensitivity +
+    tradeBonus +
     reformModifier +
     gaussianNoise(noiseStdDev);
 
@@ -157,6 +161,10 @@ export function advanceRegionEconomies(
 ): Record<string, RegionEconomy> {
   const next: Record<string, RegionEconomy> = {};
 
+  // Миграция считается один раз от снимка на начало хода — та же логика,
+  // что и торговый бонус: не зависит от порядка обработки регионов ниже.
+  const migrationDeltas = computeMigrationDeltas(state.regionEconomies);
+
   for (const region of REGIONS) {
     const economy = state.regionEconomies[region.id];
     const regionIndustries = state.industries.filter(
@@ -168,12 +176,15 @@ export function advanceRegionEconomies(
       economy.gdpIndex * (1 + growth / 400) +
       totalOperationalOutput(regionIndustries) * 0.25;
 
-    const unemploymentRate = nextRegionUnemployment(
-      region,
-      economy,
-      growth,
-      newlyCompletedJobsByRegion[region.id] ?? 0,
-      state,
+    const unemploymentRate = clamp(
+      nextRegionUnemployment(
+        region,
+        economy,
+        growth,
+        newlyCompletedJobsByRegion[region.id] ?? 0,
+        state,
+      ) + migrationDeltas[region.id],
+      CLAMP.unemployment,
     );
 
     const corruptionIndex = nextRegionCorruption(region, economy, state, oilPrice);

@@ -919,3 +919,7 @@ export const REGIONS: Region[] = [
     neighbors: ["vologda", "moscow_oblast", "vladimir", "tver", "kostroma", "ivanovo"],
   },
 ];
+
+export const REGIONS_BY_ID: Map<string, Region> = new Map(
+  REGIONS.map((r) => [r.id, r]),
+);
