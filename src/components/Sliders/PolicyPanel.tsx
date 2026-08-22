@@ -1,3 +1,6 @@
+import { Minus, Plus } from "lucide-react";
+import { TUNING } from "../../engine/constants";
+import { canChangeTaxBurden } from "../../engine/policy";
 import { useGame } from "../../state/GameContext";
 import type { Sliders } from "../../engine/types";
 
@@ -8,13 +11,6 @@ const SLIDER_META: {
   min: number;
   max: number;
 }[] = [
-  {
-    key: "taxBurden",
-    label: "Налоговая нагрузка",
-    hint: "Выше — больше доходов бюджета, но тормозит рост ВВП",
-    min: 10,
-    max: 60,
-  },
   {
     key: "govSpendingShare",
     label: "Госрасходы (% ВВП)",
@@ -40,6 +36,44 @@ export function PolicyPanel() {
         Экономическая политика
       </h3>
       <div className="flex flex-col gap-4">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-sm">
+            <span className="text-slate-200">Налоговая нагрузка</span>
+            <span className="font-mono text-slate-400">
+              {state.sliders.taxBurden.toFixed(0)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!canChangeTaxBurden(state, "down")}
+              onClick={() =>
+                dispatch({ type: "CHANGE_TAX_BURDEN", direction: "down" })
+              }
+              className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-xs text-slate-200 transition hover:border-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Minus size={12} /> {TUNING.taxPolicy.step}%
+            </button>
+            <button
+              type="button"
+              disabled={!canChangeTaxBurden(state, "up")}
+              onClick={() =>
+                dispatch({ type: "CHANGE_TAX_BURDEN", direction: "up" })
+              }
+              className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1 text-xs text-slate-200 transition hover:border-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Plus size={12} /> {TUNING.taxPolicy.step}%
+            </button>
+            <span className="text-xs text-violet-400">
+              {TUNING.taxPolicy.ppCost} очк. власти за шаг
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Изменение ставки — политическое решение, требует очков власти, а
+            не свободное перетаскивание.
+          </p>
+        </div>
+
         {SLIDER_META.map((meta) => (
           <div key={meta.key}>
             <div className="mb-1 flex items-center justify-between text-sm">

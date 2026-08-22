@@ -1,9 +1,20 @@
 import { Factory, Hammer, Landmark, ShieldAlert, Users } from "lucide-react";
 import { INDUSTRY_DEFS } from "../engine/constants";
-import { canAffordIndustry } from "../engine/industries";
+import {
+  industryObjectFlowUsd,
+  regionBaseGdpUsd,
+  regionGdpPerCapitaUsd,
+  regionGdpUsdAnnual,
+  regionIndustryGdpUsd,
+} from "../engine/economyMetrics";
+import {
+  canAffordIndustry,
+  effectiveBuildCost,
+  effectiveBuildTurns,
+} from "../engine/industries";
 import { useGame } from "../state/GameContext";
 import type { IndustrySector } from "../engine/types";
-import { fmtUsdBn } from "../utils/format";
+import { fmtUsdAuto, fmtUsdBn, fmtUsdPerCapita } from "../utils/format";
 import { REGIONS } from "./data";
 import type { Specialization } from "./types";
 
@@ -73,7 +84,37 @@ export function RegionPanel({
         <Stat icon={<Users size={14} />} label="Население" value={`${region.population.toFixed(1)} млн`} />
         <Stat icon={<Factory size={14} />} label="Безработица" value={`${economy.unemploymentRate.toFixed(1)}%`} />
         <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${economy.corruptionIndex.toFixed(0)}/100`} />
+        <Stat icon={<Landmark size={14} />} label="ВВП региона" value={fmtUsdAuto(regionGdpUsdAnnual(economy))} />
+        <Stat icon={<Users size={14} />} label="ВВП на душу" value={fmtUsdPerCapita(regionGdpPerCapitaUsd(economy, region))} />
+        <Stat icon={<Hammer size={14} />} label="Инфраструктура" value={`${region.infrastructureLevel.toFixed(0)}/100`} />
       </dl>
+
+      <div>
+        <h4 className="mb-2 text-xs uppercase tracking-wide text-slate-500">
+          Из чего складывается ВВП региона
+        </h4>
+        {(() => {
+          const industryUsd = regionIndustryGdpUsd(economy);
+          const totalUsd = regionGdpUsdAnnual(economy);
+          const industryShare = totalUsd > 0 ? (industryUsd / totalUsd) * 100 : 0;
+          return (
+            <dl className="flex flex-col gap-1 text-xs">
+              <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+                <dt className="text-slate-400">
+                  Накоплено постройками ({industryShare.toFixed(0)}%)
+                </dt>
+                <dd className="font-medium text-slate-200">{fmtUsdAuto(industryUsd)}</dd>
+              </div>
+              <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+                <dt className="text-slate-400">Базовая экономика</dt>
+                <dd className="font-medium text-slate-200">
+                  {fmtUsdAuto(regionBaseGdpUsd(economy))}
+                </dd>
+              </div>
+            </dl>
+          );
+        })()}
+      </div>
 
       <div>
         <h4 className="mb-1 text-xs uppercase tracking-wide text-slate-500">
@@ -116,7 +157,8 @@ export function RegionPanel({
                   </span>
                 ) : (
                   <span className="text-emerald-400">
-                    работает · +{ind.jobs}тыс. раб. мест
+                    работает · +{ind.jobs}тыс. раб. мест ·{" "}
+                    {fmtUsdBn(industryObjectFlowUsd(ind))}/год
                   </span>
                 )}
               </li>
@@ -127,7 +169,7 @@ export function RegionPanel({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(Object.keys(INDUSTRY_DEFS) as IndustrySector[]).map((sector) => {
             const def = INDUSTRY_DEFS[sector];
-            const affordable = canAffordIndustry(state, sector);
+            const affordable = canAffordIndustry(state, sector, region.id);
             return (
               <button
                 key={sector}
@@ -147,7 +189,8 @@ export function RegionPanel({
                   {def.label}
                 </span>
                 <span className="text-slate-400">
-                  {fmtUsdBn(def.buildCost)} · {def.buildTurns} хода
+                  {fmtUsdBn(effectiveBuildCost(sector, region.id))} ·{" "}
+                  {effectiveBuildTurns(sector, region.id)} хода
                 </span>
               </button>
             );

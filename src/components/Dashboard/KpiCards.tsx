@@ -1,19 +1,40 @@
 import {
   Activity,
+  Banknote,
   Frown,
   Gauge,
   Handshake,
   ShieldAlert,
   TrendingUp,
+  User,
   Users,
 } from "lucide-react";
+import { nationalGdpPerCapitaUsd, nationalGdpUsdAnnual } from "../../engine/economyMetrics";
 import { useGame } from "../../state/GameContext";
-import { fmtPct, fmtSignedPct, metricColor } from "../../utils/format";
+import {
+  fmtPct,
+  fmtSignedPct,
+  fmtUsdAuto,
+  fmtUsdPerCapita,
+  metricColor,
+} from "../../utils/format";
 
 export function KpiCards() {
   const { state } = useGame();
 
   const cards = [
+    {
+      icon: <Banknote size={18} />,
+      label: "ВВП ($, за год)",
+      value: fmtUsdAuto(nationalGdpUsdAnnual(state)),
+      color: "text-slate-100",
+    },
+    {
+      icon: <User size={18} />,
+      label: "ВВП на душу",
+      value: fmtUsdPerCapita(nationalGdpPerCapitaUsd(state)),
+      color: "text-slate-100",
+    },
     {
       icon: <TrendingUp size={18} />,
       label: "Рост ВВП (г/г)",

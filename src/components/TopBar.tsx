@@ -1,4 +1,12 @@
-import { BarChart3, Coins, Droplet, Landmark, ScrollText, Sliders } from "lucide-react";
+import {
+  BarChart3,
+  Coins,
+  Droplet,
+  Landmark,
+  Receipt,
+  ScrollText,
+  Sliders,
+} from "lucide-react";
 import { useGame } from "../state/GameContext";
 import { fmtQuarterDate, fmtUsdBn } from "../utils/format";
 
@@ -6,10 +14,12 @@ export function TopBar({
   onOpenReforms,
   onOpenPolicy,
   onOpenCharts,
+  onOpenBudget,
 }: {
   onOpenReforms: () => void;
   onOpenPolicy: () => void;
   onOpenCharts: () => void;
+  onOpenBudget: () => void;
 }) {
   const { state, dispatch } = useGame();
 
@@ -67,6 +77,16 @@ export function TopBar({
           className="rounded-md border border-slate-700 bg-slate-900 p-2 text-slate-300 transition hover:border-violet-500 hover:text-white"
         >
           <BarChart3 size={18} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenBudget}
+          title="Бюджет"
+          aria-label="Бюджет"
+          className="rounded-md border border-slate-700 bg-slate-900 p-2 text-slate-300 transition hover:border-violet-500 hover:text-white"
+        >
+          <Receipt size={18} />
         </button>
 
         <button

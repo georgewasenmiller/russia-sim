@@ -1,14 +1,56 @@
-import { INDUSTRY_DEFS } from "./constants";
+import { INDUSTRY_DEFS, TUNING } from "./constants";
 import type { GameState, Industry, IndustrySector } from "./types";
+import { REGIONS_BY_ID } from "../regions/data";
 
 let industryCounter = 0;
+
+function lerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+/**
+ * Модификатор стройки от инфраструктуры региона (0-100): лучше
+ * инфраструктура — дешевле и быстрее, хуже — дороже и дольше. Применяется
+ * один раз при старте стройки (см. startBuildingIndustry), тиканье таймера
+ * в advanceConstruction не меняется.
+ */
+function infrastructureMultipliers(infrastructureLevel: number): {
+  cost: number;
+  turns: number;
+} {
+  const t = infrastructureLevel / 100;
+  return {
+    cost: lerp(
+      TUNING.infrastructure.costMultiplierAtZero,
+      TUNING.infrastructure.costMultiplierAtMax,
+      t,
+    ),
+    turns: lerp(
+      TUNING.infrastructure.turnsMultiplierAtZero,
+      TUNING.infrastructure.turnsMultiplierAtMax,
+      t,
+    ),
+  };
+}
+
+export function effectiveBuildCost(sector: IndustrySector, regionId: string): number {
+  const def = INDUSTRY_DEFS[sector];
+  const infra = REGIONS_BY_ID.get(regionId)?.infrastructureLevel ?? 50;
+  return def.buildCost * infrastructureMultipliers(infra).cost;
+}
+
+export function effectiveBuildTurns(sector: IndustrySector, regionId: string): number {
+  const def = INDUSTRY_DEFS[sector];
+  const infra = REGIONS_BY_ID.get(regionId)?.infrastructureLevel ?? 50;
+  return Math.max(1, Math.round(def.buildTurns * infrastructureMultipliers(infra).turns));
+}
 
 export function canAffordIndustry(
   state: GameState,
   sector: IndustrySector,
+  regionId: string,
 ): boolean {
-  const def = INDUSTRY_DEFS[sector];
-  return state.reserves >= def.buildCost;
+  return state.reserves >= effectiveBuildCost(sector, regionId);
 }
 
 export function startBuildingIndustry(
@@ -17,7 +59,10 @@ export function startBuildingIndustry(
   regionId: string,
 ): GameState {
   const def = INDUSTRY_DEFS[sector];
-  if (!canAffordIndustry(state, sector)) return state;
+  if (!canAffordIndustry(state, sector, regionId)) return state;
+
+  const buildCost = effectiveBuildCost(sector, regionId);
+  const buildTurns = effectiveBuildTurns(sector, regionId);
 
   industryCounter += 1;
   const industry: Industry = {
@@ -26,7 +71,7 @@ export function startBuildingIndustry(
     sector: def.sector,
     label: def.label,
     status: "building",
-    turnsRemaining: def.buildTurns,
+    turnsRemaining: buildTurns,
     jobs: def.jobs,
     outputContribution: def.outputContribution,
     maintenanceCost: def.maintenanceCost,
@@ -35,7 +80,7 @@ export function startBuildingIndustry(
 
   return {
     ...state,
-    reserves: state.reserves - def.buildCost,
+    reserves: state.reserves - buildCost,
     industries: [...state.industries, industry],
     log: [...state.log, `Начато строительство: ${def.label}.`],
   };

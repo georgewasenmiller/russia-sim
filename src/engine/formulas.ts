@@ -1,5 +1,13 @@
-import { CLAMP, TUNING, clamp } from "./constants";
-import type { GameState, MetricKey, SanctionState } from "./types";
+import { CLAMP, GDP_INDEX_SCALE, TUNING, clamp } from "./constants";
+import type { GameState, IndustrySector, MetricKey, SanctionState } from "./types";
+
+const INDUSTRY_SECTORS: IndustrySector[] = [
+  "oil_gas",
+  "manufacturing",
+  "agriculture",
+  "tech",
+  "infrastructure",
+];
 
 export function gaussianNoise(stdDev: number): number {
   // Box-Muller
@@ -57,6 +65,10 @@ export function taxCollectionEfficiency(state: GameState): number {
 
 export interface BudgetResult {
   taxRevenue: number;
+  sectorTaxRevenue: Partial<Record<IndustrySector, number>>;
+  baseTaxRevenue: number;
+  /** true, если защитный пол max(...,0) реально отсёк отрицательное значение. */
+  baseTaxRevenueClamped: boolean;
   hydrocarbonRevenue: number;
   otherRevenue: number;
   totalRevenue: number;
@@ -78,6 +90,27 @@ export function computeBudget(
   const gdpUsdQuarter = state.gdpIndex * GDP_TO_USD_BN;
   const taxRevenue =
     gdpUsdQuarter * (state.sliders.taxBurden / 100) * taxCollectionEfficiency(state);
+
+  // Разбивка taxRevenue по секторам, пропорционально доле каждого сектора
+  // в текущем квартальном ВВП (сумма outputContribution его действующих
+  // предприятий по всем регионам, приведённая к той же $-шкале через
+  // GDP_INDEX_SCALE). Остаток — налог с не завязанной на конкретные
+  // постройки части экономики (baseTaxRevenue).
+  const sectorTaxRevenue: Partial<Record<IndustrySector, number>> = {};
+  let attributedTaxRevenue = 0;
+  for (const sector of INDUSTRY_SECTORS) {
+    const sectorOutput = state.industries
+      .filter((i) => i.sector === sector && i.status === "operational")
+      .reduce((acc, i) => acc + i.outputContribution, 0);
+    const sectorOutputUsdQuarter = sectorOutput * 0.25 * GDP_INDEX_SCALE * GDP_TO_USD_BN;
+    const sectorShare = gdpUsdQuarter > 0 ? sectorOutputUsdQuarter / gdpUsdQuarter : 0;
+    const revenue = taxRevenue * sectorShare;
+    sectorTaxRevenue[sector] = revenue;
+    attributedTaxRevenue += revenue;
+  }
+  const baseTaxRevenueRaw = taxRevenue - attributedTaxRevenue;
+  const baseTaxRevenue = Math.max(baseTaxRevenueRaw, 0);
+  const baseTaxRevenueClamped = baseTaxRevenueRaw < 0;
 
   const exportVolume = hydrocarbonExportVolume(state);
   const oilDiscount = sanctionsOilDiscount(state.sanctions);
@@ -102,6 +135,9 @@ export function computeBudget(
 
   return {
     taxRevenue,
+    sectorTaxRevenue,
+    baseTaxRevenue,
+    baseTaxRevenueClamped,
     hydrocarbonRevenue,
     otherRevenue,
     totalRevenue,

@@ -172,9 +172,13 @@ export function advanceRegionEconomies(
     );
 
     const growth = nextRegionGrowth(region, economy, regionIndustries, state, oilPrice);
-    const gdpIndex =
-      economy.gdpIndex * (1 + growth / 400) +
-      totalOperationalOutput(regionIndustries) * 0.25;
+    const industryFlow = totalOperationalOutput(regionIndustries) * 0.25;
+    const gdpIndex = economy.gdpIndex * (1 + growth / 400) + industryFlow;
+    // Параллельный трекинг доли gdpIndex, происходящей от построек — той
+    // же формулой, что и gdpIndex целиком (см. план). baseGdpIndex
+    // (gdpIndex - industryGdpIndex) выводится в economyMetrics.ts, не
+    // хранится.
+    const industryGdpIndex = economy.industryGdpIndex * (1 + growth / 400) + industryFlow;
 
     const unemploymentRate = clamp(
       nextRegionUnemployment(
@@ -189,7 +193,7 @@ export function advanceRegionEconomies(
 
     const corruptionIndex = nextRegionCorruption(region, economy, state, oilPrice);
 
-    next[region.id] = { gdpIndex, unemploymentRate, corruptionIndex };
+    next[region.id] = { gdpIndex, unemploymentRate, corruptionIndex, industryGdpIndex };
   }
 
   return next;

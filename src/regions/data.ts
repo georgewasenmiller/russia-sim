@@ -1,6 +1,8 @@
 import type { Region } from "./types";
 
-export const REGIONS: Region[] = [
+type RegionSeed = Omit<Region, "infrastructureLevel">;
+
+const RAW_REGIONS: RegionSeed[] = [
   {
     id: "moscow",
     name: "Москва",
@@ -919,6 +921,25 @@ export const REGIONS: Region[] = [
     neighbors: ["vologda", "moscow_oblast", "vladimir", "tver", "kostroma", "ivanovo"],
   },
 ];
+
+// Инфраструктура — статический сид-показатель, выведенный один раз из
+// стартового gdpIndex региона (не вбит вручную для всех 83 регионов и не
+// пересчитывается по ходу игры — см. план "Точные цифры..."). Более
+// развитый по стартовому ВВП регион считается изначально лучше
+// обустроенным инфраструктурно.
+const gdpIndexValues = RAW_REGIONS.map((r) => r.gdpIndex);
+const minGdpIndex = Math.min(...gdpIndexValues);
+const maxGdpIndex = Math.max(...gdpIndexValues);
+
+function deriveInfrastructureLevel(gdpIndex: number): number {
+  const t = (gdpIndex - minGdpIndex) / (maxGdpIndex - minGdpIndex);
+  return 15 + t * (95 - 15);
+}
+
+export const REGIONS: Region[] = RAW_REGIONS.map((r) => ({
+  ...r,
+  infrastructureLevel: deriveInfrastructureLevel(r.gdpIndex),
+}));
 
 export const REGIONS_BY_ID: Map<string, Region> = new Map(
   REGIONS.map((r) => [r.id, r]),

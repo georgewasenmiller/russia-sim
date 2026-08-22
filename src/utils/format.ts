@@ -11,6 +11,19 @@ export function fmtUsdBn(value: number, digits = 1): string {
   return `$${value.toFixed(digits)} млрд`;
 }
 
+/** Автомасштабирование млрд/трлн для крупных сумм (ВВП страны/региона). */
+export function fmtUsdAuto(valueBn: number, digits = 2): string {
+  if (Math.abs(valueBn) >= 1000) {
+    return `$${(valueBn / 1000).toFixed(digits)} трлн`;
+  }
+  return `$${valueBn.toFixed(1)} млрд`;
+}
+
+/** ВВП на душу и другие абсолютные суммы в $ с разделителем тысяч. */
+export function fmtUsdPerCapita(value: number): string {
+  return `$${Math.round(value).toLocaleString("ru-RU")}`;
+}
+
 export function fmtNum(value: number, digits = 0): string {
   return value.toFixed(digits);
 }

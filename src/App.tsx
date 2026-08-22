@@ -8,6 +8,7 @@ import { ReformsPanel } from "./components/Reforms/ReformsPanel";
 import { EventModal } from "./components/Events/EventModal";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { GameOverScreen } from "./components/GameOverScreen";
+import { BudgetPanel } from "./components/Budget/BudgetPanel";
 import { RegionsMap } from "./regions/RegionsMap";
 import { RegionPanel } from "./regions/RegionPanel";
 import { REGIONS } from "./regions/data";
@@ -18,6 +19,7 @@ type SidePanel =
   | { type: "reforms" }
   | { type: "policy" }
   | { type: "charts" }
+  | { type: "budget" }
   | null;
 
 function MainScreen() {
@@ -55,6 +57,7 @@ function MainScreen() {
           onOpenReforms={() => setSidePanel({ type: "reforms" })}
           onOpenPolicy={() => setSidePanel({ type: "policy" })}
           onOpenCharts={() => setSidePanel({ type: "charts" })}
+          onOpenBudget={() => setSidePanel({ type: "budget" })}
         />
       </div>
 
@@ -118,6 +121,9 @@ function MainScreen() {
                 </div>
                 <HistoryCharts />
               </div>
+            )}
+            {sidePanel.type === "budget" && (
+              <BudgetPanel onClose={closeSidePanel} />
             )}
           </aside>
         )}

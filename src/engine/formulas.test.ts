@@ -280,6 +280,8 @@ describe("turnEngine: processTurn integration", () => {
       expect(Number.isFinite(economy.corruptionIndex)).toBe(true);
       expect(economy.corruptionIndex).toBeGreaterThanOrEqual(0);
       expect(economy.corruptionIndex).toBeLessThanOrEqual(100);
+      expect(Number.isFinite(economy.industryGdpIndex)).toBe(true);
+      expect(economy.industryGdpIndex).toBeLessThan(economy.gdpIndex);
     }
   });
 });

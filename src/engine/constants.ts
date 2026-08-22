@@ -2,7 +2,7 @@ import { REGIONS } from "../regions/data";
 import type { RegionEconomy } from "../regions/types";
 import type { GameState, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {
@@ -135,6 +135,20 @@ export const TUNING = {
     shortageAbsorptionFactor: 0.5, // приток снижает безработицу реципиента при дефиците кадров
     dilutionFactor: 0.4, // приток слегка повышает безработицу реципиента без дефицита
   },
+  // Влияние инфраструктуры региона на стройку (см. план "Точные цифры...")
+  infrastructure: {
+    costMultiplierAtZero: 1.4, // множитель к buildCost при infrastructureLevel=0
+    costMultiplierAtMax: 0.8, // множитель к buildCost при infrastructureLevel=100
+    turnsMultiplierAtZero: 1.3, // множитель к buildTurns при infrastructureLevel=0
+    turnsMultiplierAtMax: 0.8, // множитель к buildTurns при infrastructureLevel=100
+  },
+  // Цена изменения налоговой ставки в очках власти (см. src/engine/policy.ts)
+  taxPolicy: {
+    step: 5, // п.п. за один клик
+    ppCost: 6, // очков власти за шаг — сопоставимо по цене с реформами (5-9 PP)
+    min: 10,
+    max: 60,
+  },
 };
 
 /**
@@ -147,7 +161,7 @@ export const TUNING = {
 export const GDP_INDEX_SCALE =
   100 / REGIONS.reduce((sum, r) => sum + r.gdpIndex, 0);
 
-const TOTAL_POPULATION = REGIONS.reduce((sum, r) => sum + r.population, 0);
+export const TOTAL_POPULATION = REGIONS.reduce((sum, r) => sum + r.population, 0);
 export const AVG_REGION_POPULATION = TOTAL_POPULATION / REGIONS.length;
 
 export function aggregateGdpIndex(
@@ -249,6 +263,7 @@ export function createInitialState(): GameState {
         gdpIndex: r.gdpIndex,
         unemploymentRate: r.unemploymentRate,
         corruptionIndex: r.corruptionIndex,
+        industryGdpIndex: 0,
       },
     ]),
   );

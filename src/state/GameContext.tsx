@@ -12,6 +12,7 @@ import { processTurn } from "../engine/turnEngine";
 import { applyReform } from "../engine/reforms";
 import { resolveEventChoice } from "../engine/events";
 import { startBuildingIndustry } from "../engine/industries";
+import { changeTaxBurden, type TaxDirection } from "../engine/policy";
 import { loadGame, saveGame } from "../engine/save";
 import type { GameState, Sliders } from "../engine/types";
 import type { IndustrySector } from "../engine/types";
@@ -19,6 +20,7 @@ import type { IndustrySector } from "../engine/types";
 type Action =
   | { type: "NEXT_TURN" }
   | { type: "SET_SLIDER"; slider: keyof Sliders; value: number }
+  | { type: "CHANGE_TAX_BURDEN"; direction: TaxDirection }
   | { type: "BUILD_INDUSTRY"; sector: IndustrySector; regionId: string }
   | { type: "APPLY_REFORM"; reformId: string }
   | { type: "RESOLVE_EVENT_CHOICE"; choiceId: string }
@@ -34,6 +36,8 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         sliders: { ...state.sliders, [action.slider]: action.value },
       };
+    case "CHANGE_TAX_BURDEN":
+      return changeTaxBurden(state, action.direction);
     case "BUILD_INDUSTRY":
       return startBuildingIndustry(state, action.sector, action.regionId);
     case "APPLY_REFORM":
