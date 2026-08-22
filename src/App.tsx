@@ -21,12 +21,14 @@ type SidePanel =
   | null;
 
 function MainScreen() {
-  const { resetWarning, dismissResetWarning, started } = useGame();
+  const { state, resetWarning, dismissResetWarning, started } = useGame();
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
 
   if (!started) return <NewGameScreen />;
 
-  const [min, max] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
+  const [min, max] = gdpDomain(
+    REGIONS.map((r) => state.regionEconomies[r.id].gdpIndex),
+  );
   const stops = legendStops(min, max);
   const closeSidePanel = () => setSidePanel(null);
 

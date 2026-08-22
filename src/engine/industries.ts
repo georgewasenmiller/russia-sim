@@ -44,6 +44,7 @@ export function startBuildingIndustry(
 export interface ConstructionResult {
   industries: Industry[];
   newlyCompletedJobs: number;
+  newlyCompletedJobsByRegion: Record<string, number>;
   logEntries: string[];
 }
 
@@ -52,6 +53,7 @@ export function advanceConstruction(
   industries: Industry[],
 ): ConstructionResult {
   let newlyCompletedJobs = 0;
+  const newlyCompletedJobsByRegion: Record<string, number> = {};
   const logEntries: string[] = [];
 
   const next = industries.map((industry) => {
@@ -59,13 +61,15 @@ export function advanceConstruction(
     const turnsRemaining = industry.turnsRemaining - 1;
     if (turnsRemaining <= 0) {
       newlyCompletedJobs += industry.jobs;
+      newlyCompletedJobsByRegion[industry.regionId] =
+        (newlyCompletedJobsByRegion[industry.regionId] ?? 0) + industry.jobs;
       logEntries.push(`Завершено строительство: ${industry.label}.`);
       return { ...industry, status: "operational" as const, turnsRemaining: 0 };
     }
     return { ...industry, turnsRemaining };
   });
 
-  return { industries: next, newlyCompletedJobs, logEntries };
+  return { industries: next, newlyCompletedJobs, newlyCompletedJobsByRegion, logEntries };
 }
 
 export function totalOperationalOutput(industries: Industry[]): number {

@@ -31,6 +31,8 @@ export function RegionPanel({
 
   if (!region) return null;
 
+  const economy = state.regionEconomies[region.id];
+
   const neighborNames = region.neighbors
     .map((id) => REGIONS.find((r) => r.id === id)?.name)
     .filter((name): name is string => Boolean(name));
@@ -67,10 +69,10 @@ export function RegionPanel({
       </div>
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <Stat icon={<Landmark size={14} />} label="ВВП-индекс" value={region.gdpIndex.toFixed(0)} />
+        <Stat icon={<Landmark size={14} />} label="ВВП-индекс" value={economy.gdpIndex.toFixed(0)} />
         <Stat icon={<Users size={14} />} label="Население" value={`${region.population.toFixed(1)} млн`} />
-        <Stat icon={<Factory size={14} />} label="Безработица" value={`${region.unemploymentRate}%`} />
-        <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${region.corruptionIndex}/100`} />
+        <Stat icon={<Factory size={14} />} label="Безработица" value={`${economy.unemploymentRate.toFixed(1)}%`} />
+        <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${economy.corruptionIndex.toFixed(0)}/100`} />
       </dl>
 
       <div>

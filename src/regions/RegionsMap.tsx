@@ -7,6 +7,7 @@ import {
 import geoData from "./geo/russia-all.geo.json";
 import { REGIONS } from "./data";
 import { gdpColor, gdpDomain } from "./colorScale";
+import { useGame } from "../state/GameContext";
 
 const WIDTH = 1300;
 const HEIGHT = 800;
@@ -41,6 +42,8 @@ export function RegionsMap({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { state } = useGame();
+
   const { geoNameToRegion, missing } = useMemo(() => {
     const byGeoName = new Map(REGIONS.map((r) => [r.geoName, r]));
     const missingRegions = REGIONS.filter(
@@ -56,7 +59,9 @@ export function RegionsMap({
     );
   }
 
-  const [min, max] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
+  const [min, max] = gdpDomain(
+    REGIONS.map((r) => state.regionEconomies[r.id].gdpIndex),
+  );
 
   return (
     <div className="h-full w-full">
@@ -75,6 +80,9 @@ export function RegionsMap({
             geographies.map((geo) => {
               const region = geoNameToRegion.get(geo.properties.name);
               const isSelected = region ? region.id === selectedId : false;
+              const fill = region
+                ? gdpColor(state.regionEconomies[region.id].gdpIndex, min, max)
+                : "#232838";
               return (
                 <Geography
                   key={geo.rsmKey}
@@ -82,18 +90,14 @@ export function RegionsMap({
                   onClick={() => region && onSelect(region.id)}
                   style={{
                     default: {
-                      fill: region
-                        ? gdpColor(region.gdpIndex, min, max)
-                        : "#232838",
+                      fill,
                       stroke: isSelected ? "#f8fafc" : "#0b0e14",
                       strokeWidth: isSelected ? 2 : 0.75,
                       outline: "none",
                       cursor: region ? "pointer" : "default",
                     },
                     hover: {
-                      fill: region
-                        ? gdpColor(region.gdpIndex, min, max)
-                        : "#232838",
+                      fill,
                       opacity: region ? 0.8 : 1,
                       stroke: isSelected ? "#f8fafc" : "#0b0e14",
                       strokeWidth: isSelected ? 2 : 0.75,
@@ -101,9 +105,7 @@ export function RegionsMap({
                       cursor: region ? "pointer" : "default",
                     },
                     pressed: {
-                      fill: region
-                        ? gdpColor(region.gdpIndex, min, max)
-                        : "#232838",
+                      fill,
                       outline: "none",
                     },
                   }}

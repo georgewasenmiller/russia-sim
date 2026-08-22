@@ -1,6 +1,8 @@
+import { REGIONS } from "../regions/data";
+import type { RegionEconomy } from "../regions/types";
 import type { GameState, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {
@@ -99,7 +101,69 @@ export const TUNING = {
     approvalCoefficient: 0.03,
     unrestPenaltyCoefficient: 0.03,
   },
+  // Рост региона (та же логика, что growth, в масштабе одного региона)
+  regionGrowth: {
+    corruptionDragCoefficient: 3, // штраф к росту при коррупции региона = 100
+    oilSensitivityCoefficient: 0.06, // усиленная версия growth.oilPriceGrowthCoefficient для oil/gas
+    industryBoostCoefficient: 0.5,
+    industryBoostCap: 4,
+    agricultureReformDamping: 0.5, // множитель нацреформ для аграрных регионов
+    agricultureStabilityFactor: 0.4, // множитель к noiseStdDev для аграрных регионов
+    noiseStdDev: 1.3,
+  },
+  // Безработица региона
+  regionUnemployment: {
+    populationRatioClamp: [0.2, 5] as [number, number],
+  },
+  // Коррупция региона
+  regionCorruption: {
+    oilRentDriftMultiplier: 3, // усиление рентного дрейфа для oil/gas-специализации
+    ambientDriftMultiplier: 0.3, // фоновый дрейф для остальных регионов
+    noiseStdDev: 0.4, // независимый локальный дрейф между реформами
+  },
 };
+
+/**
+ * Масштаб приведения суммы сид-значений region.gdpIndex (Москва = 100,
+ * остальные — по своей доле) к нацшкале, на которой откалиброван весь
+ * бюджетный движок (state.gdpIndex стартует в районе 100, GDP_TO_USD_BN
+ * в formulas.ts подобран под эту величину). Считается один раз из
+ * статических сид-данных, не пересчитывается по ходу игры.
+ */
+export const GDP_INDEX_SCALE =
+  100 / REGIONS.reduce((sum, r) => sum + r.gdpIndex, 0);
+
+const TOTAL_POPULATION = REGIONS.reduce((sum, r) => sum + r.population, 0);
+
+export function aggregateGdpIndex(
+  economies: Record<string, RegionEconomy>,
+): number {
+  const raw = REGIONS.reduce(
+    (sum, r) => sum + economies[r.id].gdpIndex,
+    0,
+  );
+  return raw * GDP_INDEX_SCALE;
+}
+
+export function aggregateWeightedUnemployment(
+  economies: Record<string, RegionEconomy>,
+): number {
+  const weighted = REGIONS.reduce(
+    (sum, r) => sum + economies[r.id].unemploymentRate * r.population,
+    0,
+  );
+  return weighted / TOTAL_POPULATION;
+}
+
+export function aggregateWeightedCorruption(
+  economies: Record<string, RegionEconomy>,
+): number {
+  const weighted = REGIONS.reduce(
+    (sum, r) => sum + economies[r.id].corruptionIndex * r.population,
+    0,
+  );
+  return weighted / TOTAL_POPULATION;
+}
 
 export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
   oil_gas: {
@@ -163,6 +227,17 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
 };
 
 export function createInitialState(): GameState {
+  const regionEconomies: Record<string, RegionEconomy> = Object.fromEntries(
+    REGIONS.map((r) => [
+      r.id,
+      {
+        gdpIndex: r.gdpIndex,
+        unemploymentRate: r.unemploymentRate,
+        corruptionIndex: r.corruptionIndex,
+      },
+    ]),
+  );
+
   return {
     saveVersion: SAVE_VERSION,
     turn: 1,
@@ -170,12 +245,12 @@ export function createInitialState(): GameState {
     quarter: 1,
     gameOver: null,
 
-    gdpIndex: 100,
+    gdpIndex: aggregateGdpIndex(regionEconomies),
     gdpGrowthRateAnnual: 10,
     inflationRateAnnual: 20,
-    unemploymentRate: 12,
+    unemploymentRate: aggregateWeightedUnemployment(regionEconomies),
     approval: 68,
-    corruption: 60,
+    corruption: aggregateWeightedCorruption(regionEconomies),
     socialUnrest: 30,
 
     budgetBalance: 0.4,
@@ -197,6 +272,7 @@ export function createInitialState(): GameState {
     activeReforms: [],
     appliedReformIds: [],
     sanctions: [],
+    regionEconomies,
 
     activeEvent: null,
     eventCooldowns: {},

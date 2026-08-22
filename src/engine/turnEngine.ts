@@ -1,19 +1,23 @@
-import { CLAMP, clamp } from "./constants";
+import {
+  CLAMP,
+  aggregateGdpIndex,
+  aggregateWeightedCorruption,
+  aggregateWeightedUnemployment,
+  clamp,
+} from "./constants";
 import {
   computeBudget,
   computeFinancing,
   GDP_TO_USD_BN,
   nextApproval,
-  nextCorruption,
-  nextGrowth,
   nextInflation,
   nextInterestRate,
   nextOilPrice,
-  nextUnemployment,
   nextUnrest,
   politicalPointsGain,
 } from "./formulas";
-import { advanceConstruction, totalOperationalOutput } from "./industries";
+import { advanceConstruction } from "./industries";
+import { advanceRegionEconomies } from "./regionEconomy";
 import { rollForEvent } from "./events";
 import { tickModifiers } from "./reforms";
 import type { GameState, Quarter, TurnSnapshot } from "./types";
@@ -62,31 +66,31 @@ export function processTurn(prev: GameState): GameState {
     CLAMP.debt,
   );
 
-  // 6. Инфляция
+  // 6. Инфляция — не трогается: те же входы (gdpIndex/inflationRateAnnual/
+  // unemploymentRate из stateWithConstruction, т.е. на начало хода),
+  // на своём прежнем месте в пайплайне, до регионального роста ниже.
   const inflationRateAnnual = nextInflation(
     stateWithConstruction,
     financing,
     oilPriceDelta,
   );
 
-  // 7. Рост ВВП
-  const gdpGrowthRateAnnual = nextGrowth(stateWithConstruction, oilPrice);
-  const gdpIndex =
-    stateWithConstruction.gdpIndex *
-      (1 + gdpGrowthRateAnnual / 400) +
-    totalOperationalOutput(construction.industries) * 0.25;
-
-  // 8. Безработица
-  const unemploymentRate = nextUnemployment(
+  // 7. Рост/безработица/коррупция — теперь снизу вверх: считаем каждый
+  // регион отдельно (та же логика, что раньше была нацформулой, но в
+  // масштабе региона), затем агрегируем в нацпоказатели.
+  const regionEconomies = advanceRegionEconomies(
     stateWithConstruction,
-    gdpGrowthRateAnnual,
-    construction.newlyCompletedJobs,
+    oilPrice,
+    construction.newlyCompletedJobsByRegion,
   );
+  const gdpIndex = aggregateGdpIndex(regionEconomies);
+  const unemploymentRate = aggregateWeightedUnemployment(regionEconomies);
+  const corruption = aggregateWeightedCorruption(regionEconomies);
+  const gdpGrowthRateAnnual =
+    (gdpIndex / stateWithConstruction.gdpIndex - 1) * 400;
 
-  // 9. Коррупция
-  const corruption = nextCorruption({ ...stateWithConstruction, oilPrice });
-
-  // 10. Недовольство
+  // 9. Недовольство — по-прежнему на stateWithConstruction (старые
+  // unemploymentRate/corruption/inflationRateAnnual, до пересчёта выше).
   const socialUnrest = nextUnrest(stateWithConstruction);
 
   // 11. Одобрение
@@ -129,6 +133,7 @@ export function processTurn(prev: GameState): GameState {
     oilPrice,
     politicalPoints: prev.politicalPoints + pgGain,
     industries: construction.industries,
+    regionEconomies,
     eventCooldowns: Object.fromEntries(
       Object.entries(prev.eventCooldowns).map(([id, t]) => [id, Math.max(t - 1, 0)]),
     ),

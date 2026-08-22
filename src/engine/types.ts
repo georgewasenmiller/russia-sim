@@ -1,3 +1,5 @@
+import type { RegionEconomy } from "../regions/types";
+
 export type Quarter = 1 | 2 | 3 | 4;
 
 export type IndustrySector =
@@ -167,6 +169,7 @@ export interface GameState {
   activeReforms: ActiveModifier[];
   appliedReformIds: string[];
   sanctions: SanctionState[];
+  regionEconomies: Record<string, RegionEconomy>;
 
   activeEvent: GameEvent | null;
   eventCooldowns: Record<string, number>;

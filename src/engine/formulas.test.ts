@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { createInitialState } from "./constants";
+import {
+  GDP_INDEX_SCALE,
+  aggregateGdpIndex,
+  aggregateWeightedCorruption,
+  aggregateWeightedUnemployment,
+  createInitialState,
+} from "./constants";
 import {
   computeBudget,
   computeFinancing,
-  nextCorruption,
-  nextGrowth,
   nextInflation,
   nextInterestRate,
   nextOilPrice,
-  nextUnemployment,
   nextUnrest,
   politicalPointsGain,
 } from "./formulas";
+import {
+  nextRegionCorruption,
+  nextRegionGrowth,
+  nextRegionUnemployment,
+} from "./regionEconomy";
 import { processTurn } from "./turnEngine";
+import { REGIONS } from "../regions/data";
 
 describe("formulas: boundary safety", () => {
   it("nextOilPrice stays within clamp bounds across many samples", () => {
@@ -54,30 +63,8 @@ describe("formulas: boundary safety", () => {
     expect(inflation).toBeLessThanOrEqual(200);
   });
 
-  it("nextGrowth stays within clamp bounds at extreme unrest/tax", () => {
+  it("nextUnrest stays within 0-100 at extreme inputs", () => {
     const state = createInitialState();
-    state.socialUnrest = 100;
-    state.sliders.taxBurden = 60;
-    state.inflationRateAnnual = 150;
-    const growth = nextGrowth(state, state.oilPrice);
-    expect(growth).toBeGreaterThanOrEqual(-25);
-    expect(growth).toBeLessThanOrEqual(25);
-  });
-
-  it("nextUnemployment stays within clamp bounds", () => {
-    const state = createInitialState();
-    const rate = nextUnemployment(state, -20, 0);
-    expect(rate).toBeGreaterThanOrEqual(2);
-    expect(rate).toBeLessThanOrEqual(40);
-  });
-
-  it("nextCorruption and nextUnrest stay within 0-100", () => {
-    const state = createInitialState();
-    state.oilPrice = 200;
-    const corruption = nextCorruption(state);
-    expect(corruption).toBeGreaterThanOrEqual(0);
-    expect(corruption).toBeLessThanOrEqual(100);
-
     state.inflationRateAnnual = 150;
     state.unemploymentRate = 40;
     state.corruption = 100;
@@ -102,6 +89,130 @@ describe("formulas: boundary safety", () => {
     state.socialUnrest = 100;
     const gain = politicalPointsGain(state);
     expect(gain).toBeGreaterThanOrEqual(0.5);
+  });
+});
+
+describe("regionEconomy: boundary safety and specialization effects", () => {
+  it("nextRegionGrowth/Unemployment/Corruption stay within clamp bounds at extremes", () => {
+    const state = createInitialState();
+    state.socialUnrest = 100;
+    state.sliders.taxBurden = 60;
+    state.inflationRateAnnual = 150;
+    state.oilPrice = 200;
+    for (const region of REGIONS) {
+      const economy = state.regionEconomies[region.id];
+      const growth = nextRegionGrowth(region, economy, [], state, state.oilPrice);
+      expect(growth).toBeGreaterThanOrEqual(-25);
+      expect(growth).toBeLessThanOrEqual(25);
+
+      const unemployment = nextRegionUnemployment(region, economy, -20, 50, state);
+      expect(unemployment).toBeGreaterThanOrEqual(2);
+      expect(unemployment).toBeLessThanOrEqual(40);
+
+      const corruption = nextRegionCorruption(region, economy, state, state.oilPrice);
+      expect(corruption).toBeGreaterThanOrEqual(0);
+      expect(corruption).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("oil/gas regions are more sensitive to oil price swings than a non-specialized region", () => {
+    const state = createInitialState();
+    const oilRegion = REGIONS.find((r) => r.specializations.includes("oil"))!;
+    const plainRegion = REGIONS.find(
+      (r) =>
+        !r.specializations.includes("oil") && !r.specializations.includes("gas"),
+    )!;
+    const highOilPrice = state.oilPriceMeanTarget + 50;
+
+    const oilGrowthAtTarget = nextRegionGrowth(
+      oilRegion,
+      state.regionEconomies[oilRegion.id],
+      [],
+      state,
+      state.oilPriceMeanTarget,
+    );
+    const oilGrowthHigh = nextRegionGrowth(
+      oilRegion,
+      state.regionEconomies[oilRegion.id],
+      [],
+      state,
+      highOilPrice,
+    );
+    const plainGrowthAtTarget = nextRegionGrowth(
+      plainRegion,
+      state.regionEconomies[plainRegion.id],
+      [],
+      state,
+      state.oilPriceMeanTarget,
+    );
+    const plainGrowthHigh = nextRegionGrowth(
+      plainRegion,
+      state.regionEconomies[plainRegion.id],
+      [],
+      state,
+      highOilPrice,
+    );
+
+    const oilDelta = oilGrowthHigh - oilGrowthAtTarget;
+    const plainDelta = plainGrowthHigh - plainGrowthAtTarget;
+    expect(oilDelta).toBeGreaterThan(plainDelta);
+  });
+
+  it("small-population regions do not get implausibly amplified unemployment swings from one factory", () => {
+    const state = createInitialState();
+    const tiny = [...REGIONS].sort((a, b) => a.population - b.population)[0];
+    const economy = state.regionEconomies[tiny.id];
+    const growth = nextRegionGrowth(tiny, economy, [], state, state.oilPrice);
+    const oneFactoryJobs = 40; // крупнейшее число рабочих мест среди INDUSTRY_DEFS
+    const rate = nextRegionUnemployment(tiny, economy, growth, oneFactoryJobs, state);
+    // Один достроенный завод не должен за один ход обрушить безработицу
+    // региона больше чем на несколько п.п.
+    expect(Math.abs(rate - economy.unemploymentRate)).toBeLessThan(5);
+  });
+
+  it("aggregateGdpIndex/WeightedUnemployment/WeightedCorruption match manual weighted calculation", () => {
+    const state = createInitialState();
+    const manualGdpSum = REGIONS.reduce(
+      (sum, r) => sum + state.regionEconomies[r.id].gdpIndex,
+      0,
+    );
+    const totalPopulation = REGIONS.reduce((sum, r) => sum + r.population, 0);
+    const manualUnemployment =
+      REGIONS.reduce(
+        (sum, r) =>
+          sum + state.regionEconomies[r.id].unemploymentRate * r.population,
+        0,
+      ) / totalPopulation;
+    const manualCorruption =
+      REGIONS.reduce(
+        (sum, r) =>
+          sum + state.regionEconomies[r.id].corruptionIndex * r.population,
+        0,
+      ) / totalPopulation;
+
+    expect(aggregateGdpIndex(state.regionEconomies)).toBeCloseTo(
+      manualGdpSum * GDP_INDEX_SCALE,
+      6,
+    );
+    expect(aggregateWeightedUnemployment(state.regionEconomies)).toBeCloseTo(
+      manualUnemployment,
+      6,
+    );
+    expect(aggregateWeightedCorruption(state.regionEconomies)).toBeCloseTo(
+      manualCorruption,
+      6,
+    );
+    // Стартовое состояние должно быть согласовано само с собой: агрегат
+    // регионов при старте игры равен нацполям в createInitialState.
+    expect(aggregateGdpIndex(state.regionEconomies)).toBeCloseTo(state.gdpIndex, 6);
+    expect(aggregateWeightedUnemployment(state.regionEconomies)).toBeCloseTo(
+      state.unemploymentRate,
+      6,
+    );
+    expect(aggregateWeightedCorruption(state.regionEconomies)).toBeCloseTo(
+      state.corruption,
+      6,
+    );
   });
 });
 
@@ -159,5 +270,16 @@ describe("turnEngine: processTurn integration", () => {
     expect(Number.isFinite(state.reserves)).toBe(true);
     expect(Number.isFinite(state.publicDebt)).toBe(true);
     expect(Number.isFinite(state.approval)).toBe(true);
+
+    for (const region of REGIONS) {
+      const economy = state.regionEconomies[region.id];
+      expect(Number.isFinite(economy.gdpIndex)).toBe(true);
+      expect(Number.isFinite(economy.unemploymentRate)).toBe(true);
+      expect(economy.unemploymentRate).toBeGreaterThanOrEqual(2);
+      expect(economy.unemploymentRate).toBeLessThanOrEqual(40);
+      expect(Number.isFinite(economy.corruptionIndex)).toBe(true);
+      expect(economy.corruptionIndex).toBeGreaterThanOrEqual(0);
+      expect(economy.corruptionIndex).toBeLessThanOrEqual(100);
+    }
   });
 });
