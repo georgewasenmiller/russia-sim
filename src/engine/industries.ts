@@ -122,3 +122,29 @@ export function totalOperationalOutput(industries: Industry[]): number {
     .filter((i) => i.status === "operational")
     .reduce((acc, i) => acc + i.outputContribution, 0);
 }
+
+export interface IndustryGrouping {
+  operational: Partial<Record<IndustrySector, number>>;
+  building: { sector: IndustrySector; turnsRemaining: number }[];
+}
+
+/**
+ * Группирует предприятия (уже отфильтрованные под один регион) по
+ * секторам — для отображения на карте (режим "Застройка"): счётчик по
+ * секторам вместо одной иконки на завод, отдельно список строящихся с
+ * оставшимся временем.
+ */
+export function groupIndustriesBySector(industries: Industry[]): IndustryGrouping {
+  const operational: Partial<Record<IndustrySector, number>> = {};
+  const building: { sector: IndustrySector; turnsRemaining: number }[] = [];
+
+  for (const industry of industries) {
+    if (industry.status === "operational") {
+      operational[industry.sector] = (operational[industry.sector] ?? 0) + 1;
+    } else {
+      building.push({ sector: industry.sector, turnsRemaining: industry.turnsRemaining });
+    }
+  }
+
+  return { operational, building };
+}

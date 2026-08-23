@@ -26,3 +26,27 @@ body {
   background: #2a2f3d;
   border-radius: 6px;
 }
+
+/*
+ * Пульсирующая обводка региона на карте — сигнал только для переходящих,
+ * разовых на один ход событий (например, стройка завершается в этот ход),
+ * не для хронических состояний (для тех — статичный акцент, см.
+ * KpiCards.tsx). Целенаправленно анимирует stroke-opacity/drop-shadow, а
+ * не stroke/stroke-width — Geography уже задаёт их инлайн-style, а эти
+ * два свойства инлайном не заданы, так что конфликта каскада нет.
+ */
+@keyframes region-pulse {
+  0%,
+  100% {
+    stroke-opacity: 0.55;
+    filter: drop-shadow(0 0 0 rgba(167, 139, 250, 0));
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.85));
+  }
+}
+
+.region-pulse {
+  animation: region-pulse 1.6s ease-in-out infinite;
+}

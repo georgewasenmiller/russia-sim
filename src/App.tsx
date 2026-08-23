@@ -9,10 +9,9 @@ import { EventModal } from "./components/Events/EventModal";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { GameOverScreen } from "./components/GameOverScreen";
 import { BudgetPanel } from "./components/Budget/BudgetPanel";
-import { RegionsMap } from "./regions/RegionsMap";
+import { MapLegend } from "./components/Dashboard/MapLegend";
+import { RegionsMap, type MapMode } from "./regions/RegionsMap";
 import { RegionPanel } from "./regions/RegionPanel";
-import { REGIONS } from "./regions/data";
-import { gdpDomain, legendStops } from "./regions/colorScale";
 
 type SidePanel =
   | { type: "region"; id: string }
@@ -23,15 +22,12 @@ type SidePanel =
   | null;
 
 function MainScreen() {
-  const { state, resetWarning, dismissResetWarning, started } = useGame();
+  const { resetWarning, dismissResetWarning, started } = useGame();
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+  const [mapMode, setMapMode] = useState<MapMode>("economy");
 
   if (!started) return <NewGameScreen />;
 
-  const [min, max] = gdpDomain(
-    REGIONS.map((r) => state.regionEconomies[r.id].gdpIndex),
-  );
-  const stops = legendStops(min, max);
   const closeSidePanel = () => setSidePanel(null);
 
   return (
@@ -71,19 +67,10 @@ function MainScreen() {
             <RegionsMap
               selectedId={sidePanel?.type === "region" ? sidePanel.id : null}
               onSelect={(id) => setSidePanel({ type: "region", id })}
+              mapMode={mapMode}
             />
           </div>
-          <div className="mt-3 flex shrink-0 items-center gap-2 text-xs text-slate-500">
-            <span>ВВП-индекс:</span>
-            <div className="flex h-3 flex-1 overflow-hidden rounded">
-              {stops.map((stop, i) => (
-                <div key={i} className="flex-1" style={{ background: stop.color }} />
-              ))}
-            </div>
-            <span>{min.toFixed(0)}</span>
-            <span>—</span>
-            <span>{max.toFixed(0)}</span>
-          </div>
+          <MapLegend mode={mapMode} onModeChange={setMapMode} />
         </div>
 
         {sidePanel && (

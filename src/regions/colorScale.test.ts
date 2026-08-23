@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { gdpColor, gdpDomain, legendStops, normalizeGdp } from "./colorScale";
+import {
+  gdpColor,
+  gdpDomain,
+  infrastructureColor,
+  infrastructureLegendStops,
+  legendStops,
+  normalizeGdp,
+  numericDomain,
+} from "./colorScale";
 import { REGIONS } from "./data";
 
 describe("colorScale", () => {
@@ -57,6 +65,31 @@ describe("colorScale", () => {
       for (const neighborId of region.neighbors) {
         expect(ids.has(neighborId)).toBe(true);
       }
+    }
+  });
+});
+
+describe("infrastructureColor (режим карты «Застройка»)", () => {
+  it("returns a valid hex color at the domain boundaries", () => {
+    const [min, max] = numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+    expect(infrastructureColor(min, min, max)).toMatch(/^#[0-9a-f]{6}$/);
+    expect(infrastructureColor(max, min, max)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("uses a visibly different palette from gdpColor at the same relative position", () => {
+    const [gMin, gMax] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
+    const [iMin, iMax] = numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+    const midGdp = gdpColor((gMin + gMax) / 2, gMin, gMax);
+    const midInfra = infrastructureColor((iMin + iMax) / 2, iMin, iMax);
+    expect(midInfra).not.toBe(midGdp);
+  });
+
+  it("infrastructureLegendStops are monotonically increasing with valid colors", () => {
+    const stops = infrastructureLegendStops(15, 95, 5);
+    expect(stops).toHaveLength(5);
+    for (let i = 1; i < stops.length; i++) {
+      expect(stops[i].value).toBeGreaterThan(stops[i - 1].value);
+      expect(stops[i].color).toMatch(/^#[0-9a-f]{6}$/);
     }
   });
 });

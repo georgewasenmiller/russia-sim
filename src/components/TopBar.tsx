@@ -129,7 +129,13 @@ function Stat({
         ? "text-rose-400"
         : "text-slate-100";
   return (
-    <div className="flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5">
+    <div
+      className={`flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
+        tone === "bad"
+          ? "bg-slate-900 ring-2 ring-rose-500/60 shadow-[0_0_14px_rgba(244,63,94,0.35)]"
+          : "bg-slate-900"
+      }`}
+    >
       {icon}
       <div className="flex flex-col leading-tight">
         <span className="text-[10px] uppercase tracking-wide text-slate-500">

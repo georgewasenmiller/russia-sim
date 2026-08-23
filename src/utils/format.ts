@@ -32,14 +32,27 @@ export function fmtQuarterDate(year: number, quarter: number): string {
   return `${quarter} кв. ${year}`;
 }
 
+export type MetricSeverity = "ok" | "warn" | "critical";
+
+export function metricSeverity(
+  value: number,
+  thresholds: { good: number; warn: number },
+  invert = false,
+): MetricSeverity {
+  const better = invert ? value <= thresholds.good : value >= thresholds.good;
+  const warn = invert ? value <= thresholds.warn : value >= thresholds.warn;
+  if (better) return "ok";
+  if (warn) return "warn";
+  return "critical";
+}
+
 export function metricColor(
   value: number,
   thresholds: { good: number; warn: number },
   invert = false,
 ): string {
-  const better = invert ? value <= thresholds.good : value >= thresholds.good;
-  const warn = invert ? value <= thresholds.warn : value >= thresholds.warn;
-  if (better) return "text-emerald-400";
-  if (warn) return "text-amber-400";
+  const severity = metricSeverity(value, thresholds, invert);
+  if (severity === "ok") return "text-emerald-400";
+  if (severity === "warn") return "text-amber-400";
   return "text-rose-400";
 }
