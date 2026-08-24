@@ -1,19 +1,21 @@
 import { Factory, Hammer, Landmark, ShieldAlert, Users } from "lucide-react";
-import { INDUSTRY_DEFS } from "../engine/constants";
+import { INDUSTRY_DEFS, TUNING, maxProductionSlots, regionLaborForce } from "../engine/constants";
 import {
   industryObjectFlowUsd,
-  regionBaseGdpUsd,
   regionGdpPerCapitaUsd,
   regionGdpUsdAnnual,
-  regionIndustryGdpUsd,
 } from "../engine/economyMetrics";
 import {
   canAffordIndustry,
+  canBuildInRegion,
   effectiveBuildCost,
   effectiveBuildTurns,
+  hasFreeInfrastructureSlot,
+  hasFreeProductionSlot,
+  totalOperationalJobs,
 } from "../engine/industries";
 import { useGame } from "../state/GameContext";
-import type { IndustrySector } from "../engine/types";
+import type { GameState, IndustrySector } from "../engine/types";
 import { fmtUsdAuto, fmtUsdBn, fmtUsdPerCapita } from "../utils/format";
 import { REGIONS } from "./data";
 import type { Specialization } from "./types";
@@ -29,6 +31,22 @@ const SPECIALIZATION_LABEL: Record<Specialization, string> = {
   tech: "Технологии",
   ports: "Порты",
 };
+
+function buildDisabledReason(
+  state: GameState,
+  sector: IndustrySector,
+  regionId: string,
+): string | null {
+  if (!canBuildInRegion(state, sector, regionId)) {
+    return sector === "infrastructure"
+      ? "Инфраструктура уже на максимуме"
+      : "Нет свободных слотов застройки";
+  }
+  if (!canAffordIndustry(state, sector, regionId)) {
+    return "Не хватает резервов бюджета";
+  }
+  return null;
+}
 
 export function RegionPanel({
   selectedId,
@@ -50,6 +68,18 @@ export function RegionPanel({
 
   const regionIndustries = state.industries.filter(
     (ind) => ind.regionId === region.id,
+  );
+
+  const laborForce = regionLaborForce(region);
+  const employedJobs = totalOperationalJobs(regionIndustries);
+  const jobDeficit = Math.max(laborForce - employedJobs, 0);
+
+  const productionSlotsMax = maxProductionSlots(region, economy);
+  const productionSlotsUsed = regionIndustries.filter(
+    (i) => i.sector !== "infrastructure",
+  ).length;
+  const infraStagesLeft = Math.ceil(
+    (100 - economy.infrastructureLevel) / TUNING.infrastructureBuild.levelGainPerProject,
   );
 
   return (
@@ -80,40 +110,52 @@ export function RegionPanel({
       </div>
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <Stat icon={<Landmark size={14} />} label="ВВП-индекс" value={economy.gdpIndex.toFixed(0)} />
+        <Stat icon={<Landmark size={14} />} label="ВВП-индекс" value={economy.gdpIndex.toFixed(1)} />
         <Stat icon={<Users size={14} />} label="Население" value={`${region.population.toFixed(1)} млн`} />
         <Stat icon={<Factory size={14} />} label="Безработица" value={`${economy.unemploymentRate.toFixed(1)}%`} />
         <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${economy.corruptionIndex.toFixed(0)}/100`} />
         <Stat icon={<Landmark size={14} />} label="ВВП региона" value={fmtUsdAuto(regionGdpUsdAnnual(economy))} />
         <Stat icon={<Users size={14} />} label="ВВП на душу" value={fmtUsdPerCapita(regionGdpPerCapitaUsd(economy, region))} />
-        <Stat icon={<Hammer size={14} />} label="Инфраструктура" value={`${region.infrastructureLevel.toFixed(0)}/100`} />
+        <Stat icon={<Hammer size={14} />} label="Инфраструктура" value={`${economy.infrastructureLevel.toFixed(0)}/100`} />
+        <Stat
+          icon={<Factory size={14} />}
+          label="Производственные слоты"
+          value={`${productionSlotsUsed}/${productionSlotsMax}`}
+        />
       </dl>
 
       <div>
         <h4 className="mb-2 text-xs uppercase tracking-wide text-slate-500">
-          Из чего складывается ВВП региона
+          Откуда берётся ВВП и рабочие места региона
         </h4>
-        {(() => {
-          const industryUsd = regionIndustryGdpUsd(economy);
-          const totalUsd = regionGdpUsdAnnual(economy);
-          const industryShare = totalUsd > 0 ? (industryUsd / totalUsd) * 100 : 0;
-          return (
-            <dl className="flex flex-col gap-1 text-xs">
-              <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
-                <dt className="text-slate-400">
-                  Накоплено постройками ({industryShare.toFixed(0)}%)
-                </dt>
-                <dd className="font-medium text-slate-200">{fmtUsdAuto(industryUsd)}</dd>
-              </div>
-              <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
-                <dt className="text-slate-400">Базовая экономика</dt>
-                <dd className="font-medium text-slate-200">
-                  {fmtUsdAuto(regionBaseGdpUsd(economy))}
-                </dd>
-              </div>
-            </dl>
-          );
-        })()}
+        <dl className="flex flex-col gap-1 text-xs">
+          <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+            <dt className="text-slate-400">Трудоспособное население</dt>
+            <dd className="font-medium text-slate-200">{laborForce.toFixed(0)} тыс.</dd>
+          </div>
+          <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+            <dt className="text-slate-400">Занято на предприятиях</dt>
+            <dd className="font-medium text-emerald-400">{employedJobs.toFixed(0)} тыс.</dd>
+          </div>
+          <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+            <dt className="text-slate-400">Не хватает рабочих мест</dt>
+            <dd className="font-medium text-rose-400">{jobDeficit.toFixed(0)} тыс.</dd>
+          </div>
+          <div className="flex items-center justify-between rounded bg-slate-800/40 px-2 py-1.5">
+            <dt className="text-slate-400">
+              Инфраструктура {infraStagesLeft > 0 ? `(ещё ${infraStagesLeft} этап(ов) до максимума)` : "(максимум достигнут)"}
+            </dt>
+            <dd className="font-medium text-slate-200">
+              {hasFreeInfrastructureSlot(state, region.id) ? "можно строить" : "недоступно"}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-1.5 text-[11px] text-slate-600">
+          ВВП региона — сумма вклада каждого действующего предприятия ниже
+          (плюс небольшая нефтегазовая рента при высокой цене нефти для
+          нефтегазовых регионов). Отдельной "базовой экономики" не
+          существует.
+        </p>
       </div>
 
       <div>
@@ -150,7 +192,17 @@ export function RegionPanel({
                 key={ind.id}
                 className="flex items-center justify-between rounded-md bg-slate-800/60 px-3 py-2 text-sm"
               >
-                <span className="text-slate-200">{ind.label}</span>
+                <span className="flex items-center gap-1.5 text-slate-200">
+                  {ind.label}
+                  {ind.origin === "legacy" && (
+                    <span
+                      className="rounded bg-slate-700/60 px-1 py-0.5 text-[10px] text-slate-400"
+                      title="Унаследовано от советской промышленной базы, не построено игроком"
+                    >
+                      советское наследие
+                    </span>
+                  )}
+                </span>
                 {ind.status === "building" ? (
                   <span className="flex items-center gap-1 text-amber-400">
                     <Hammer size={14} /> {ind.turnsRemaining} ход(а/ов)
@@ -169,13 +221,13 @@ export function RegionPanel({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(Object.keys(INDUSTRY_DEFS) as IndustrySector[]).map((sector) => {
             const def = INDUSTRY_DEFS[sector];
-            const affordable = canAffordIndustry(state, sector, region.id);
+            const disabledReason = buildDisabledReason(state, sector, region.id);
             return (
               <button
                 key={sector}
                 type="button"
-                disabled={!affordable}
-                title={def.description}
+                disabled={disabledReason !== null}
+                title={disabledReason ?? def.description}
                 onClick={() =>
                   dispatch({
                     type: "BUILD_INDUSTRY",
@@ -189,13 +241,23 @@ export function RegionPanel({
                   {def.label}
                 </span>
                 <span className="text-slate-400">
-                  {fmtUsdBn(effectiveBuildCost(sector, region.id))} ·{" "}
-                  {effectiveBuildTurns(sector, region.id)} хода
+                  {fmtUsdBn(effectiveBuildCost(state, sector, region.id))} ·{" "}
+                  {effectiveBuildTurns(state, sector, region.id)} хода
                 </span>
+                {disabledReason && (
+                  <span className="text-[10px] text-rose-400">{disabledReason}</span>
+                )}
               </button>
             );
           })}
         </div>
+        {!hasFreeProductionSlot(state, region.id) && (
+          <p className="mt-2 text-[11px] text-amber-400">
+            Нет свободных производственных слотов застройки в этом регионе.
+            Постройте инфраструктуру — она откроет новые слоты (не
+            расходует существующие).
+          </p>
+        )}
       </div>
     </div>
   );

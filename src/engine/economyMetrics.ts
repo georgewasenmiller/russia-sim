@@ -30,17 +30,13 @@ export function regionGdpPerCapitaUsd(
   return (regionGdpUsdAnnual(economy) / region.population) * 1000;
 }
 
-/** Накопленный вклад построек региона в его ВВП, в $ (сток, не темп прироста). */
-export function regionIndustryGdpUsd(economy: RegionEconomy): number {
-  return economy.industryGdpIndex * GDP_INDEX_SCALE * GDP_TO_USD_BN * 4;
-}
-
-/** "Базовая" (не завязанная на конкретные постройки) часть ВВП региона, в $. */
-export function regionBaseGdpUsd(economy: RegionEconomy): number {
-  return regionGdpUsdAnnual(economy) - regionIndustryGdpUsd(economy);
-}
-
-/** Текущий годовой темп прироста ВВП от одного действующего предприятия, в $. */
+/**
+ * Годовой вклад одного действующего предприятия в ВВП его региона, в $ —
+ * буквальная, самая мелкая единица разбивки "откуда взялся ВВП региона":
+ * ВВП региона теперь и есть сумма таких вкладов (плюс множитель
+ * продуктивности и небольшая нефтегазовая рента, см. regionEconomy.ts), не
+ * абстрактная "базовая экономика" поверх.
+ */
 export function industryObjectFlowUsd(industry: Industry): number {
-  return industry.outputContribution * 0.25 * GDP_INDEX_SCALE * GDP_TO_USD_BN * 4;
+  return industry.outputContribution * GDP_INDEX_SCALE * GDP_TO_USD_BN * 4;
 }

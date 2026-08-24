@@ -81,7 +81,7 @@ export function processTurn(prev: GameState): GameState {
   const regionEconomies = advanceRegionEconomies(
     stateWithConstruction,
     oilPrice,
-    construction.newlyCompletedJobsByRegion,
+    construction.newlyCompletedInfrastructureByRegion,
   );
   const gdpIndex = aggregateGdpIndex(regionEconomies);
   const unemploymentRate = aggregateWeightedUnemployment(regionEconomies);

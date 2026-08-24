@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   GDP_INDEX_SCALE,
+  TUNING,
   aggregateGdpIndex,
   aggregateWeightedCorruption,
   aggregateWeightedUnemployment,
@@ -16,9 +17,10 @@ import {
   politicalPointsGain,
 } from "./formulas";
 import {
+  advanceRegionEconomies,
   nextRegionCorruption,
-  nextRegionGrowth,
-  nextRegionUnemployment,
+  regionMacroMultiplier,
+  targetRegionUnemployment,
 } from "./regionEconomy";
 import { processTurn } from "./turnEngine";
 import { REGIONS } from "../regions/data";
@@ -93,7 +95,7 @@ describe("formulas: boundary safety", () => {
 });
 
 describe("regionEconomy: boundary safety and specialization effects", () => {
-  it("nextRegionGrowth/Unemployment/Corruption stay within clamp bounds at extremes", () => {
+  it("regionMacroMultiplier/targetRegionUnemployment/nextRegionCorruption stay within clamp bounds at extremes", () => {
     const state = createInitialState();
     state.socialUnrest = 100;
     state.sliders.taxBurden = 60;
@@ -101,11 +103,11 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
     state.oilPrice = 200;
     for (const region of REGIONS) {
       const economy = state.regionEconomies[region.id];
-      const growth = nextRegionGrowth(region, economy, [], state, state.oilPrice);
-      expect(growth).toBeGreaterThanOrEqual(-25);
-      expect(growth).toBeLessThanOrEqual(25);
+      const multiplier = regionMacroMultiplier(region, economy, state, state.oilPrice);
+      expect(multiplier).toBeGreaterThanOrEqual(TUNING.regionMacro.floor);
+      expect(multiplier).toBeLessThanOrEqual(TUNING.regionMacro.ceiling);
 
-      const unemployment = nextRegionUnemployment(region, economy, -20, 50, state);
+      const unemployment = targetRegionUnemployment(region, []);
       expect(unemployment).toBeGreaterThanOrEqual(2);
       expect(unemployment).toBeLessThanOrEqual(40);
 
@@ -124,50 +126,56 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
     )!;
     const highOilPrice = state.oilPriceMeanTarget + 50;
 
-    const oilGrowthAtTarget = nextRegionGrowth(
+    const oilMultiplierAtTarget = regionMacroMultiplier(
       oilRegion,
       state.regionEconomies[oilRegion.id],
-      [],
       state,
       state.oilPriceMeanTarget,
     );
-    const oilGrowthHigh = nextRegionGrowth(
+    const oilMultiplierHigh = regionMacroMultiplier(
       oilRegion,
       state.regionEconomies[oilRegion.id],
-      [],
       state,
       highOilPrice,
     );
-    const plainGrowthAtTarget = nextRegionGrowth(
+    const plainMultiplierAtTarget = regionMacroMultiplier(
       plainRegion,
       state.regionEconomies[plainRegion.id],
-      [],
       state,
       state.oilPriceMeanTarget,
     );
-    const plainGrowthHigh = nextRegionGrowth(
+    const plainMultiplierHigh = regionMacroMultiplier(
       plainRegion,
       state.regionEconomies[plainRegion.id],
-      [],
       state,
       highOilPrice,
     );
 
-    const oilDelta = oilGrowthHigh - oilGrowthAtTarget;
-    const plainDelta = plainGrowthHigh - plainGrowthAtTarget;
+    const oilDelta = Math.abs(oilMultiplierHigh - oilMultiplierAtTarget);
+    const plainDelta = Math.abs(plainMultiplierHigh - plainMultiplierAtTarget);
     expect(oilDelta).toBeGreaterThan(plainDelta);
   });
 
-  it("small-population regions do not get implausibly amplified unemployment swings from one factory", () => {
+  it("unemployment moves gradually toward the target when a region's jobs suddenly change, not instantly", () => {
     const state = createInitialState();
-    const tiny = [...REGIONS].sort((a, b) => a.population - b.population)[0];
-    const economy = state.regionEconomies[tiny.id];
-    const growth = nextRegionGrowth(tiny, economy, [], state, state.oilPrice);
-    const oneFactoryJobs = 40; // крупнейшее число рабочих мест среди INDUSTRY_DEFS
-    const rate = nextRegionUnemployment(tiny, economy, growth, oneFactoryJobs, state);
-    // Один достроенный завод не должен за один ход обрушить безработицу
-    // региона больше чем на несколько п.п.
-    expect(Math.abs(rate - economy.unemploymentRate)).toBeLessThan(5);
+    const region = [...REGIONS].sort((a, b) => b.population - a.population)[0];
+    const before = state.regionEconomies[region.id].unemploymentRate;
+
+    // Резкая потеря всех предприятий региона — цель безработицы подскакивает,
+    // но фактическое значение должно сдвинуться лишь частично за один ход.
+    const stripped = {
+      ...state,
+      industries: state.industries.filter((i) => i.regionId !== region.id),
+    };
+    const next = advanceRegionEconomies(stripped, stripped.oilPrice, {});
+    const target = targetRegionUnemployment(region, []);
+    const after = next[region.id].unemploymentRate;
+
+    expect(after).toBeGreaterThanOrEqual(2);
+    expect(after).toBeLessThanOrEqual(40);
+    if (Math.abs(target - before) > 1) {
+      expect(Math.abs(after - before)).toBeLessThan(Math.abs(target - before));
+    }
   });
 
   it("aggregateGdpIndex/WeightedUnemployment/WeightedCorruption match manual weighted calculation", () => {
@@ -280,8 +288,9 @@ describe("turnEngine: processTurn integration", () => {
       expect(Number.isFinite(economy.corruptionIndex)).toBe(true);
       expect(economy.corruptionIndex).toBeGreaterThanOrEqual(0);
       expect(economy.corruptionIndex).toBeLessThanOrEqual(100);
-      expect(Number.isFinite(economy.industryGdpIndex)).toBe(true);
-      expect(economy.industryGdpIndex).toBeLessThan(economy.gdpIndex);
+      expect(Number.isFinite(economy.infrastructureLevel)).toBe(true);
+      expect(economy.infrastructureLevel).toBeGreaterThanOrEqual(0);
+      expect(economy.infrastructureLevel).toBeLessThanOrEqual(100);
     }
   });
 });

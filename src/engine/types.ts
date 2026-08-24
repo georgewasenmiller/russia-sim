@@ -15,8 +15,15 @@ export interface IndustryDef {
   description: string;
   buildCost: number; // $ млрд
   buildTurns: number;
-  jobs: number; // тыс. рабочих мест при вводе в строй
-  outputContribution: number; // вклад в индекс ВВП за ход при эксплуатации
+  /**
+   * Доля трудоспособного населения региона, которую занимает ОДНО такое
+   * предприятие (не флэт-число — см. computeJobsAndOutput в industries.ts).
+   * Один и тот же сектор даёт разное число рабочих мест в разных регионах,
+   * пропорционально их размеру.
+   */
+  baseJobsShare: number;
+  /** Вклад в индекс ВВП за ход на 1 тыс. занятых при эксплуатации. */
+  productivityPerWorker: number;
   maintenanceCost: number; // $ млрд за ход
   exportVolumeContribution: number; // только для oil_gas: у.е. объёма экспорта
 }
@@ -28,10 +35,14 @@ export interface Industry {
   label: string;
   status: "building" | "operational";
   turnsRemaining: number;
+  /** тыс. рабочих мест — вычислено по региону в момент начала стройки. */
   jobs: number;
+  /** вклад в индекс ВВП за ход — вычислен по региону в момент начала стройки. */
   outputContribution: number;
   maintenanceCost: number;
   exportVolumeContribution: number;
+  /** "legacy" — унаследовано при старте партии, "built" — построено игроком. */
+  origin: "legacy" | "built";
 }
 
 export type MetricKey =

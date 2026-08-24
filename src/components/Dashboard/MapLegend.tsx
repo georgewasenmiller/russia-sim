@@ -15,7 +15,7 @@ export function MapLegend({
   const [min, max] =
     mode === "economy"
       ? gdpDomain(REGIONS.map((r) => state.regionEconomies[r.id].gdpIndex))
-      : numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+      : numericDomain(REGIONS.map((r) => state.regionEconomies[r.id].infrastructureLevel));
   const stops = mode === "economy" ? legendStops(min, max) : infrastructureLegendStops(min, max);
 
   return (

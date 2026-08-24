@@ -94,15 +94,18 @@ export function computeBudget(
   // Разбивка taxRevenue по секторам, пропорционально доле каждого сектора
   // в текущем квартальном ВВП (сумма outputContribution его действующих
   // предприятий по всем регионам, приведённая к той же $-шкале через
-  // GDP_INDEX_SCALE). Остаток — налог с не завязанной на конкретные
-  // постройки части экономики (baseTaxRevenue).
+  // GDP_INDEX_SCALE — той же шкале, что и state.gdpIndex, так как ВВП
+  // региона теперь буквально складывается из этой же суммы, см.
+  // regionEconomy.ts). Остаток — налог с не завязанной на конкретные
+  // постройки части экономики (baseTaxRevenue: множитель продуктивности,
+  // нефтегазовая рента — см. план "Причинность экономики...").
   const sectorTaxRevenue: Partial<Record<IndustrySector, number>> = {};
   let attributedTaxRevenue = 0;
   for (const sector of INDUSTRY_SECTORS) {
     const sectorOutput = state.industries
       .filter((i) => i.sector === sector && i.status === "operational")
       .reduce((acc, i) => acc + i.outputContribution, 0);
-    const sectorOutputUsdQuarter = sectorOutput * 0.25 * GDP_INDEX_SCALE * GDP_TO_USD_BN;
+    const sectorOutputUsdQuarter = sectorOutput * GDP_INDEX_SCALE * GDP_TO_USD_BN;
     const sectorShare = gdpUsdQuarter > 0 ? sectorOutputUsdQuarter / gdpUsdQuarter : 0;
     const revenue = taxRevenue * sectorShare;
     sectorTaxRevenue[sector] = revenue;

@@ -1,8 +1,8 @@
 import { REGIONS } from "../regions/data";
-import type { RegionEconomy } from "../regions/types";
-import type { GameState, IndustryDef, IndustrySector } from "./types";
+import type { Region, RegionEconomy } from "../regions/types";
+import type { GameState, Industry, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {
@@ -43,25 +43,23 @@ export const TUNING = {
     unemploymentGapCoefficient: 0.18,
     noiseStdDev: 1.1,
   },
-  // Рост ВВП
+  // Общестрановой тренд производительности — общий фон, декоративно
+  // затухающий за игру (постсоветский рывок вначале). Раньше был
+  // независимой добавкой к темпу роста; теперь — множитель "насколько
+  // продуктивно используются уже построенные мощности" (см.
+  // regionEconomy.ts: regionMacroMultiplier), buildings остаются
+  // единственным источником самого ВВП.
   growth: {
     initialPotential: 8.5,
     potentialDecayPerTurn: 0.045,
     potentialFloor: 2.2,
-    taxDragCoefficient: 0.055,
-    inflationDragThreshold: 12,
-    inflationDragCoefficient: 0.05,
-    unrestDragCoefficient: 0.035,
-    industryGrowthContribution: 0.4,
-    oilPriceGrowthCoefficient: 0.02,
-    sanctionsDragDefault: 0,
-    noiseStdDev: 1.0,
   },
-  // Безработица (закон Оукена, упрощённо)
+  // Безработица: единственное, что здесь ещё используется напрямую —
+  // естественный уровень (структурная фрикционная безработица, к которой
+  // тяготеет инфляционный разрыв и миграция) — сама безработица региона
+  // теперь считается строго от дефицита рабочих мест, см.
+  // regionEconomy.ts: targetRegionUnemployment.
   unemployment: {
-    okunCoefficient: 0.32,
-    jobsToRateDivisor: 700, // тыс. рабочих мест / этот делитель = п.п. безработицы
-    meanReversion: 0.05,
     naturalRate: 6,
   },
   // Коррупция
@@ -101,19 +99,41 @@ export const TUNING = {
     approvalCoefficient: 0.03,
     unrestPenaltyCoefficient: 0.03,
   },
-  // Рост региона (та же логика, что growth, в масштабе одного региона)
-  regionGrowth: {
-    corruptionDragCoefficient: 3, // штраф к росту при коррупции региона = 100
-    oilSensitivityCoefficient: 0.06, // усиленная версия growth.oilPriceGrowthCoefficient для oil/gas
-    industryBoostCoefficient: 0.5,
-    industryBoostCap: 4,
+  /**
+   * Множитель отдачи построек региона (см. regionEconomy.ts:
+   * regionMacroMultiplier) — здания остаются единственным источником
+   * выпуска (buildingsOutput), эти коэффициенты лишь модулируют, насколько
+   * продуктивно этот выпуск конвертируется в ВВП. Пересчитаны заново под
+   * новую роль (доля самого выпуска, а не темпа годового роста, как было
+   * раньше в TUNING.regionGrowth) — жёстко ограничены полом/потолком, чтобы
+   * даже одновременный удар всех штрафов не мог обнулить/обратить в
+   * отрицательное ВВП региона за один ход.
+   */
+  regionMacro: {
+    floor: 0.35,
+    ceiling: 1.5,
+    taxDragCoefficient: 0.005, // доля выпуска за п.п. налоговой нагрузки выше 25
+    inflationDragThreshold: 12,
+    inflationDragCoefficient: 0.004, // доля выпуска за п.п. инфляции выше порога
+    unrestDragCoefficient: 0.0015, // доля выпуска за п.п. недовольства
+    corruptionDragCoefficient: 0.18, // доля выпуска при коррупции региона = 100
+    oilSensitivityCoefficient: 0.003, // доля выпуска за $ отклонения цены нефти от целевой (только oil/gas регионы)
     agricultureReformDamping: 0.5, // множитель нацреформ для аграрных регионов
     agricultureStabilityFactor: 0.4, // множитель к noiseStdDev для аграрных регионов
-    noiseStdDev: 1.3,
+    noiseStdDev: 0.013,
+    // potentialGrowth()/tradeGrowthBonus()/сумма реформенных модификаторов
+    // gdpGrowthRateAnnual откалиброваны для старой модели (доли годового
+    // темпа роста, диапазон ±25) — при переиспользовании как долей самого
+    // множителя выпуска делятся на эту константу.
+    legacyPointsToFractionDivisor: 100,
   },
   // Безработица региона
   regionUnemployment: {
     populationRatioClamp: [0.2, 5] as [number, number],
+    // Целевое значение (targetRegionUnemployment) считается строго от
+    // дефицита рабочих мест; фактическое движется к цели за 2-3 хода, не
+    // телепортируется мгновенно в тот же ход, что здание достроилось.
+    adjustmentSpeed: 0.4,
   },
   // Коррупция региона
   regionCorruption: {
@@ -135,12 +155,59 @@ export const TUNING = {
     shortageAbsorptionFactor: 0.5, // приток снижает безработицу реципиента при дефиците кадров
     dilutionFactor: 0.4, // приток слегка повышает безработицу реципиента без дефицита
   },
-  // Влияние инфраструктуры региона на стройку (см. план "Точные цифры...")
+  // Влияние инфраструктуры региона на стройку (локальный эффект)
   infrastructure: {
     costMultiplierAtZero: 1.4, // множитель к buildCost при infrastructureLevel=0
     costMultiplierAtMax: 0.8, // множитель к buildCost при infrastructureLevel=100
     turnsMultiplierAtZero: 1.3, // множитель к buildTurns при infrastructureLevel=0
     turnsMultiplierAtMax: 0.8, // множитель к buildTurns при infrastructureLevel=100
+  },
+  // Трудоспособное население — база для расчёта рабочих мест зданий и
+  // строгой безработицы (см. regionLaborForce).
+  laborForce: {
+    shareOfPopulation: 0.55,
+  },
+  /**
+   * Слоты застройки (см. план "Причинность экономики..."): производственные
+   * слоты (oil_gas/manufacturing/agriculture/tech) ограничены населением и
+   * живой инфраструктурой региона — инфраструктура (сектор infrastructure)
+   * НЕ расходует этот пул вообще, у неё отдельный лимит (см.
+   * src/engine/industries.ts: hasFreeInfrastructureSlot), чтобы регион не
+   * мог необратимо застрять без возможности построить инфраструктуру, если
+   * последний общий слот занят не-инфраструктурным зданием.
+   */
+  buildingSlots: {
+    base: 2,
+    populationDivisor: 1.5,
+    infrastructureDivisor: 25,
+    // Сколько производственных слотов ВСЕГДА остаются свободными от
+    // унаследованных (легаси) предприятий при старте партии — гарантирует,
+    // что игроку есть что строить немедленно в любом регионе (см.
+    // createInitialState). Для большинства регионов легаси-заполнение
+    // останавливается раньше этого предела, естественным образом достигнув
+    // целевой занятости, — это только нижний порог гарантии, не типичный
+    // исход.
+    legacyReservedFreeSlots: 1,
+  },
+  // Общестрановой бонус скорости стройки от промышленной базы всей страны
+  // (см. план п.4) — не стоимости, только скорости, дополнительно к
+  // локальному эффекту инфраструктуры.
+  nationalIndustrialBase: {
+    saturationCount: 200, // предприятий по стране, после которого бонус выходит на максимум
+    multiplierAtZero: 1.15, // страна без единого предприятия строит на 15% дольше
+    multiplierAtSaturation: 0.85, // насыщенная промбаза — на 15% быстрее
+  },
+  // Инфраструктура как строимый объект
+  infrastructureBuild: {
+    levelGainPerProject: 10, // прирост RegionEconomy.infrastructureLevel за завершённый проект, кламп на 100
+  },
+  // Нефтегазовая рента — узкое исключение из "ВВП только от зданий" (см.
+  // план п.1): небольшой независимый доход региона с oil/gas-специализацией
+  // при цене нефти выше опорной, тот же принцип "$40 — порог ренты", что
+  // уже применяется в nextRegionCorruption.
+  oilGasRent: {
+    coefficient: 0.03,
+    referencePrice: 40,
   },
   // Цена изменения налоговой ставки в очках власти (см. src/engine/policy.ts)
   taxPolicy: {
@@ -151,28 +218,8 @@ export const TUNING = {
   },
 };
 
-/**
- * Масштаб приведения суммы сид-значений region.gdpIndex (Москва = 100,
- * остальные — по своей доле) к нацшкале, на которой откалиброван весь
- * бюджетный движок (state.gdpIndex стартует в районе 100, GDP_TO_USD_BN
- * в formulas.ts подобран под эту величину). Считается один раз из
- * статических сид-данных, не пересчитывается по ходу игры.
- */
-export const GDP_INDEX_SCALE =
-  100 / REGIONS.reduce((sum, r) => sum + r.gdpIndex, 0);
-
 export const TOTAL_POPULATION = REGIONS.reduce((sum, r) => sum + r.population, 0);
 export const AVG_REGION_POPULATION = TOTAL_POPULATION / REGIONS.length;
-
-export function aggregateGdpIndex(
-  economies: Record<string, RegionEconomy>,
-): number {
-  const raw = REGIONS.reduce(
-    (sum, r) => sum + economies[r.id].gdpIndex,
-    0,
-  );
-  return raw * GDP_INDEX_SCALE;
-}
 
 export function aggregateWeightedUnemployment(
   economies: Record<string, RegionEconomy>,
@@ -202,8 +249,8 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
       "Добыча и экспорт углеводородов. Увеличивает объём экспорта — доходы бюджета от цены нефти растут вместе с этим сектором.",
     buildCost: 14,
     buildTurns: 6,
-    jobs: 25,
-    outputContribution: 0.35,
+    baseJobsShare: 1.2,
+    productivityPerWorker: 0.012,
     maintenanceCost: 0.6,
     exportVolumeContribution: 0.8,
   },
@@ -213,8 +260,8 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
     description: "Заводы и производство. Стабильный вклад в ВВП и занятость.",
     buildCost: 9,
     buildTurns: 5,
-    jobs: 40,
-    outputContribution: 0.3,
+    baseJobsShare: 1.45,
+    productivityPerWorker: 0.007,
     maintenanceCost: 0.45,
     exportVolumeContribution: 0,
   },
@@ -224,8 +271,8 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
     description: "АПК: дешевле и быстрее строить, меньше вклад в ВВП.",
     buildCost: 5,
     buildTurns: 3,
-    jobs: 30,
-    outputContribution: 0.15,
+    baseJobsShare: 1.35,
+    productivityPerWorker: 0.004,
     maintenanceCost: 0.2,
     exportVolumeContribution: 0,
   },
@@ -236,8 +283,8 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
       "Долгая и дорогая стройка, но большой вклад в ВВП и наименьшее содержание на единицу выпуска.",
     buildCost: 16,
     buildTurns: 7,
-    jobs: 18,
-    outputContribution: 0.4,
+    baseJobsShare: 1.15,
+    productivityPerWorker: 0.014,
     maintenanceCost: 0.35,
     exportVolumeContribution: 0,
   },
@@ -245,27 +292,204 @@ export const INDUSTRY_DEFS: Record<IndustrySector, IndustryDef> = {
     sector: "infrastructure",
     label: "Инфраструктура",
     description:
-      "Дороги, энергосети, порты. Прямого выпуска не даёт, но снижает издержки остальной экономики.",
+      "Дороги, энергосети, порты. Скромный прямой доход — основная ценность в ускорении и удешевлении остальной стройки региона.",
     buildCost: 11,
     buildTurns: 4,
-    jobs: 22,
-    outputContribution: 0.2,
+    baseJobsShare: 1.25,
+    productivityPerWorker: 0.005,
     maintenanceCost: 0.3,
     exportVolumeContribution: 0,
   },
 };
 
+/** Трудоспособное население региона, тыс. человек. */
+export function regionLaborForce(region: Region): number {
+  return region.population * 1000 * TUNING.laborForce.shareOfPopulation;
+}
+
+/**
+ * Максимум производственных слотов региона (все сектора, кроме
+ * infrastructure — у неё отдельный лимит, см. industries.ts:
+ * hasFreeInfrastructureSlot). Растёт с населением региона (рабочая сила на
+ * параллельные проекты) и живым infrastructureLevel (развитая
+ * инфраструктура поддерживает больше одновременных строек) — не
+ * фиксирован навсегда, инвестиции в инфраструктуру открывают новые слоты.
+ */
+export function maxProductionSlots(region: Region, economy: RegionEconomy): number {
+  return (
+    TUNING.buildingSlots.base +
+    Math.round(region.population / TUNING.buildingSlots.populationDivisor) +
+    Math.round(economy.infrastructureLevel / TUNING.buildingSlots.infrastructureDivisor)
+  );
+}
+
+/**
+ * Рабочие места и вклад в ВВП ОДНОГО предприятия данного сектора именно в
+ * этом регионе — не флэт-константа: нормировано на "долю одного
+ * производственного слота" региона (laborForce / maxProductionSlots), то
+ * есть один и тот же тип здания даёт разное число рабочих мест в Москве и
+ * в Ненецком АО, пропорционально тому, сколько трудоспособного населения
+ * "закреплено" за одним слотом в этом конкретном регионе. baseJobsShare
+ * (0.85-1.1) — во сколько раз здание этого сектора крупнее/мельче среднего
+ * слота; намеренно узкий диапазон, чтобы выбор специализации региона (какой
+ * сектор доступен для легаси-предприятий) не приводил к сильно разной
+ * занятости у похожих по размеру регионов.
+ */
+export function computeJobsAndOutput(
+  sector: IndustrySector,
+  region: Region,
+  economy: RegionEconomy,
+): { jobs: number; outputContribution: number } {
+  const def = INDUSTRY_DEFS[sector];
+  const laborForce = regionLaborForce(region);
+  const perBuilding = laborForce / maxProductionSlots(region, economy);
+  const jobs = Math.round(perBuilding * def.baseJobsShare);
+  const outputContribution = jobs * def.productivityPerWorker;
+  return { jobs, outputContribution };
+}
+
+type SpecializationSector = "oil" | "gas" | "coal" | "metals" | "industry" | "ports" | "agriculture" | "finance" | "tech";
+
+const LEGACY_SPECIALIZATION_TO_SECTOR: Record<SpecializationSector, IndustrySector> = {
+  oil: "oil_gas",
+  gas: "oil_gas",
+  coal: "manufacturing",
+  metals: "manufacturing",
+  industry: "manufacturing",
+  ports: "manufacturing",
+  agriculture: "agriculture",
+  finance: "tech",
+  tech: "tech",
+};
+
+/** Секторы для унаследованных предприятий региона при старте партии —
+ * только производственные (никогда infrastructure, см. TUNING.buildingSlots
+ * doc), выведены из специализаций региона, минимум один (manufacturing по
+ * умолчанию, если специализации не распознаны). */
+function legacySectorsForRegion(region: Region): IndustrySector[] {
+  const sectors = region.specializations
+    .map((s) => LEGACY_SPECIALIZATION_TO_SECTOR[s as SpecializationSector])
+    .filter((s): s is IndustrySector => s !== undefined);
+  const unique = Array.from(new Set(sectors));
+  return unique.length > 0 ? unique : ["manufacturing"];
+}
+
+/**
+ * Унаследованные (легаси) предприятия региона при старте партии —
+ * советская промышленная база 2000 года. Не обход правила "ВВП только от
+ * зданий", а его буквальное соблюдение: стартовый ВВП тоже приходит от
+ * зданий, просто игрок их не строил сам. Заполняет производственные слоты
+ * до целевой занятости (из сид-безработицы региона), но никогда не трогает
+ * последний legacyReservedFreeSlots слот(ов) — игроку с первого хода есть
+ * что строить в любом регионе. Поскольку рабочие места на здание не зависят
+ * от общего числа слотов (см. computeJobsAndOutput), для большинства
+ * регионов цель занятости достигается заметно раньше этого предела,
+ * оставляя куда больше свободных слотов, чем гарантированный минимум.
+ */
+function seedLegacyIndustries(region: Region): Industry[] {
+  const seedEconomy: RegionEconomy = {
+    gdpIndex: 0,
+    unemploymentRate: region.unemploymentRate,
+    corruptionIndex: region.corruptionIndex,
+    infrastructureLevel: region.infrastructureSeed,
+  };
+  const laborForce = regionLaborForce(region);
+  const targetEmployment = laborForce * (1 - region.unemploymentRate / 100);
+  const slotCap = Math.max(
+    1,
+    maxProductionSlots(region, seedEconomy) - TUNING.buildingSlots.legacyReservedFreeSlots,
+  );
+
+  const sectors = legacySectorsForRegion(region);
+  const industries: Industry[] = [];
+  let cumulativeJobs = 0;
+  let i = 0;
+  while (industries.length < slotCap) {
+    if (cumulativeJobs >= targetEmployment) break;
+    const sector = sectors[i % sectors.length];
+    const def = INDUSTRY_DEFS[sector];
+    const { jobs, outputContribution } = computeJobsAndOutput(sector, region, seedEconomy);
+    const wouldBe = cumulativeJobs + jobs;
+    // Здания добавляются целыми штуками — если ОЧЕРЕДНОЕ здание перелетит
+    // цель занятости заметно дальше, чем текущий недобор до неё, ближе к
+    // цели остановиться ДО него, а не перескочить через неё (иначе
+    // безработица уходит в отрицательную и упирается в пол клампа).
+    if (industries.length > 0 && Math.abs(wouldBe - targetEmployment) > Math.abs(cumulativeJobs - targetEmployment)) {
+      break;
+    }
+    industries.push({
+      id: `legacy-${region.id}-${industries.length}`,
+      regionId: region.id,
+      sector,
+      label: def.label,
+      status: "operational",
+      turnsRemaining: 0,
+      jobs,
+      outputContribution,
+      maintenanceCost: def.maintenanceCost,
+      exportVolumeContribution: def.exportVolumeContribution,
+      origin: "legacy",
+    });
+    cumulativeJobs = wouldBe;
+    i += 1;
+  }
+  return industries;
+}
+
+/** Легаси-предприятия всех регионов, посчитаны один раз при загрузке
+ * модуля — источник и для GDP_INDEX_SCALE (калибровка нацшкалы под новую,
+ * буквально от построек идущую сумму), и для createInitialState. */
+const SEED_LEGACY_INDUSTRIES: Industry[] = REGIONS.flatMap(seedLegacyIndustries);
+
+/**
+ * Масштаб приведения суммы "сырого" выпуска построек (raw regionEconomies
+ * gdpIndex, в единицах computeJobsAndOutput) к нацшкале, на которой
+ * откалиброван весь бюджетный движок (state.gdpIndex стартует в районе
+ * 100, GDP_TO_USD_BN в formulas.ts подобран под эту величину). Считается
+ * один раз из стартовых легаси-предприятий — так что национальный ВВП на
+ * старте партии всегда ровно ~100 независимо от конкретных значений
+ * baseJobsShare/productivityPerWorker, тем же способом, каким раньше
+ * калибровался от статичных сид-gdpIndex регионов.
+ */
+export const GDP_INDEX_SCALE =
+  100 / SEED_LEGACY_INDUSTRIES.reduce((sum, i) => sum + i.outputContribution, 0);
+
+export function aggregateGdpIndex(
+  economies: Record<string, RegionEconomy>,
+): number {
+  const raw = REGIONS.reduce(
+    (sum, r) => sum + economies[r.id].gdpIndex,
+    0,
+  );
+  return raw * GDP_INDEX_SCALE;
+}
+
+function seedRegionEconomy(region: Region, legacyIndustries: Industry[]): RegionEconomy {
+  const laborForce = regionLaborForce(region);
+  const jobs = legacyIndustries.reduce((sum, i) => sum + i.jobs, 0);
+  const buildingsOutput = legacyIndustries.reduce((sum, i) => sum + i.outputContribution, 0);
+  const unemploymentRate = clamp(
+    ((laborForce - jobs) / laborForce) * 100,
+    CLAMP.unemployment,
+  );
+  return {
+    gdpIndex: buildingsOutput,
+    unemploymentRate,
+    corruptionIndex: region.corruptionIndex,
+    infrastructureLevel: region.infrastructureSeed,
+  };
+}
+
 export function createInitialState(): GameState {
+  const legacyByRegion = new Map<string, Industry[]>();
+  for (const industry of SEED_LEGACY_INDUSTRIES) {
+    const list = legacyByRegion.get(industry.regionId) ?? [];
+    list.push(industry);
+    legacyByRegion.set(industry.regionId, list);
+  }
+
   const regionEconomies: Record<string, RegionEconomy> = Object.fromEntries(
-    REGIONS.map((r) => [
-      r.id,
-      {
-        gdpIndex: r.gdpIndex,
-        unemploymentRate: r.unemploymentRate,
-        corruptionIndex: r.corruptionIndex,
-        industryGdpIndex: 0,
-      },
-    ]),
+    REGIONS.map((r) => [r.id, seedRegionEconomy(r, legacyByRegion.get(r.id) ?? [])]),
   );
 
   return {
@@ -298,7 +522,7 @@ export function createInitialState(): GameState {
       deficitMonetizationShare: 40,
     },
 
-    industries: [],
+    industries: [...SEED_LEGACY_INDUSTRIES],
     activeReforms: [],
     appliedReformIds: [],
     sanctions: [],

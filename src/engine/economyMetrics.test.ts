@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createInitialState } from "./constants";
 import {
+  industryObjectFlowUsd,
   nationalGdpPerCapitaUsd,
   nationalGdpUsdAnnual,
-  regionBaseGdpUsd,
   regionGdpPerCapitaUsd,
   regionGdpUsdAnnual,
-  regionIndustryGdpUsd,
 } from "./economyMetrics";
 import { computeBudget } from "./formulas";
 import {
@@ -47,15 +46,17 @@ describe("economyMetrics: $ scale consistency", () => {
     );
   });
 
-  it("industry + base $ GDP of a region sum back to its total $ GDP", () => {
+  it("region GDP at game start equals the sum of its legacy industries' individual $ contributions", () => {
     const state = createInitialState();
     const region = REGIONS_BY_ID.get("khanty_mansi")!;
     const economy = state.regionEconomies[region.id];
-    const total = regionGdpUsdAnnual(economy);
-    const industry = regionIndustryGdpUsd(economy);
-    const base = regionBaseGdpUsd(economy);
-    expect(industry + base).toBeCloseTo(total, 6);
-    expect(industry).toBe(0); // сид: построек ещё нет
+    const regionIndustries = state.industries.filter((i) => i.regionId === region.id);
+    const sumIndustries = regionIndustries.reduce(
+      (sum, i) => sum + industryObjectFlowUsd(i),
+      0,
+    );
+    expect(regionIndustries.length).toBeGreaterThan(0); // легаси-предприятия уже посеяны
+    expect(sumIndustries).toBeCloseTo(regionGdpUsdAnnual(economy), 6);
   });
 });
 
@@ -73,35 +74,46 @@ describe("computeBudget: sector revenue breakdown", () => {
     }
   });
 
-  it("baseTaxRevenue floor is not triggered at game start (no industries built yet)", () => {
+  it("baseTaxRevenue is negligible at game start (all GDP is attributable to legacy buildings)", () => {
+    // Все ВВП на старте буквально приходит от легаси-предприятий (см. план
+    // "Причинность экономики..."), так что сумма по секторам должна
+    // совпадать с taxRevenue с точностью до погрешности плавающей точки —
+    // соответственно baseTaxRevenue близко к нулю (может быть отсечено
+    // защитным полом ровно на границе из-за той же погрешности, это не баг).
     const state = createInitialState();
     const budget = computeBudget(state, state.oilPrice);
-    expect(budget.baseTaxRevenueClamped).toBe(false);
+    expect(budget.baseTaxRevenue).toBeCloseTo(0, 6);
   });
 });
 
 describe("infrastructure affects construction cost/turns", () => {
   it("a higher-infrastructure region builds the same sector cheaper and no slower than a lower-infrastructure one", () => {
+    const state = createInitialState();
     const sorted = [...REGIONS].sort(
-      (a, b) => a.infrastructureLevel - b.infrastructureLevel,
+      (a, b) =>
+        state.regionEconomies[a.id].infrastructureLevel -
+        state.regionEconomies[b.id].infrastructureLevel,
     );
     const lowInfra = sorted[0];
     const highInfra = sorted[sorted.length - 1];
-    expect(highInfra.infrastructureLevel).toBeGreaterThan(lowInfra.infrastructureLevel);
+    expect(state.regionEconomies[highInfra.id].infrastructureLevel).toBeGreaterThan(
+      state.regionEconomies[lowInfra.id].infrastructureLevel,
+    );
 
-    const costLow = effectiveBuildCost("manufacturing", lowInfra.id);
-    const costHigh = effectiveBuildCost("manufacturing", highInfra.id);
-    const turnsLow = effectiveBuildTurns("manufacturing", lowInfra.id);
-    const turnsHigh = effectiveBuildTurns("manufacturing", highInfra.id);
+    const costLow = effectiveBuildCost(state, "manufacturing", lowInfra.id);
+    const costHigh = effectiveBuildCost(state, "manufacturing", highInfra.id);
+    const turnsLow = effectiveBuildTurns(state, "manufacturing", lowInfra.id);
+    const turnsHigh = effectiveBuildTurns(state, "manufacturing", highInfra.id);
 
     expect(costHigh).toBeLessThan(costLow);
     expect(turnsHigh).toBeLessThanOrEqual(turnsLow);
   });
 
   it("effective build turns never drop below 1", () => {
+    const state = createInitialState();
     for (const region of REGIONS) {
       for (const sector of ["oil_gas", "manufacturing", "agriculture", "tech", "infrastructure"] as const) {
-        expect(effectiveBuildTurns(sector, region.id)).toBeGreaterThanOrEqual(1);
+        expect(effectiveBuildTurns(state, sector, region.id)).toBeGreaterThanOrEqual(1);
       }
     }
   });
@@ -109,7 +121,7 @@ describe("infrastructure affects construction cost/turns", () => {
   it("canAffordIndustry/startBuildingIndustry use the region-adjusted cost, not the flat def cost", () => {
     let state = createInitialState();
     const region = REGIONS_BY_ID.get("moscow")!;
-    state = { ...state, reserves: effectiveBuildCost("tech", region.id) };
+    state = { ...state, reserves: effectiveBuildCost(state, "tech", region.id) };
     expect(canAffordIndustry(state, "tech", region.id)).toBe(true);
     state = startBuildingIndustry(state, "tech", region.id);
     expect(state.reserves).toBeCloseTo(0, 6);
@@ -153,8 +165,8 @@ describe("policy: changeTaxBurden costs political points", () => {
   });
 });
 
-describe("multi-turn: industryGdpIndex stays strictly below gdpIndex", () => {
-  it("base GDP of an actively-industrializing region never goes negative over many turns", () => {
+describe("multi-turn: buildings-driven GDP stays consistent", () => {
+  it("region GDP stays positive and finite over many turns of active industrialization", () => {
     let state = createInitialState();
     const region = REGIONS_BY_ID.get("sverdlovsk")!;
     state = startBuildingIndustry(state, "manufacturing", region.id);
@@ -174,7 +186,8 @@ describe("multi-turn: industryGdpIndex stays strictly below gdpIndex", () => {
     }
 
     const economy = state.regionEconomies[region.id];
-    expect(economy.industryGdpIndex).toBeLessThan(economy.gdpIndex);
-    expect(regionBaseGdpUsd(economy)).toBeGreaterThan(0);
+    expect(Number.isFinite(economy.gdpIndex)).toBe(true);
+    expect(economy.gdpIndex).toBeGreaterThan(0);
+    expect(regionGdpUsdAnnual(economy)).toBeGreaterThan(0);
   });
 });

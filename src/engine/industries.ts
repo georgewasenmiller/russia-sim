@@ -1,4 +1,9 @@
-import { INDUSTRY_DEFS, TUNING } from "./constants";
+import {
+  INDUSTRY_DEFS,
+  TUNING,
+  computeJobsAndOutput,
+  maxProductionSlots,
+} from "./constants";
 import type { GameState, Industry, IndustrySector } from "./types";
 import { REGIONS_BY_ID } from "../regions/data";
 
@@ -33,16 +38,43 @@ function infrastructureMultipliers(infrastructureLevel: number): {
   };
 }
 
-export function effectiveBuildCost(sector: IndustrySector, regionId: string): number {
+/** Общестрановой множитель скорости стройки (не стоимости) — см. план п.4:
+ * чем больше в стране уже действующих промышленных/аграрных/технологичных
+ * предприятий (инфраструктура намеренно не считается — у неё свой,
+ * локальный эффект, см. infrastructureMultipliers), тем быстрее строится
+ * ЛЮБОЕ здание в ЛЮБОМ регионе. */
+export function nationalIndustrialMultiplier(state: GameState): number {
+  const count = state.industries.filter(
+    (i) => i.status === "operational" && i.sector !== "infrastructure",
+  ).length;
+  const t = Math.min(1, count / TUNING.nationalIndustrialBase.saturationCount);
+  return lerp(
+    TUNING.nationalIndustrialBase.multiplierAtZero,
+    TUNING.nationalIndustrialBase.multiplierAtSaturation,
+    t,
+  );
+}
+
+export function effectiveBuildCost(
+  state: GameState,
+  sector: IndustrySector,
+  regionId: string,
+): number {
   const def = INDUSTRY_DEFS[sector];
-  const infra = REGIONS_BY_ID.get(regionId)?.infrastructureLevel ?? 50;
+  const infra = state.regionEconomies[regionId]?.infrastructureLevel ?? 50;
   return def.buildCost * infrastructureMultipliers(infra).cost;
 }
 
-export function effectiveBuildTurns(sector: IndustrySector, regionId: string): number {
+export function effectiveBuildTurns(
+  state: GameState,
+  sector: IndustrySector,
+  regionId: string,
+): number {
   const def = INDUSTRY_DEFS[sector];
-  const infra = REGIONS_BY_ID.get(regionId)?.infrastructureLevel ?? 50;
-  return Math.max(1, Math.round(def.buildTurns * infrastructureMultipliers(infra).turns));
+  const infra = state.regionEconomies[regionId]?.infrastructureLevel ?? 50;
+  const local = infrastructureMultipliers(infra).turns;
+  const national = nationalIndustrialMultiplier(state);
+  return Math.max(1, Math.round(def.buildTurns * local * national));
 }
 
 export function canAffordIndustry(
@@ -50,7 +82,47 @@ export function canAffordIndustry(
   sector: IndustrySector,
   regionId: string,
 ): boolean {
-  return state.reserves >= effectiveBuildCost(sector, regionId);
+  return state.reserves >= effectiveBuildCost(state, sector, regionId);
+}
+
+export function usedProductionSlots(state: GameState, regionId: string): number {
+  return state.industries.filter(
+    (i) => i.regionId === regionId && i.sector !== "infrastructure",
+  ).length;
+}
+
+export function hasFreeProductionSlot(state: GameState, regionId: string): boolean {
+  const region = REGIONS_BY_ID.get(regionId);
+  const economy = state.regionEconomies[regionId];
+  if (!region || !economy) return false;
+  return usedProductionSlots(state, regionId) < maxProductionSlots(region, economy);
+}
+
+/**
+ * Инфраструктура НЕ расходует производственные слоты — у неё отдельный,
+ * самозатухающий лимит: строить можно, пока прогнозируемый уровень (текущий
+ * + прирост от уже строящихся проектов) не достигнет 100. Это архитектурно
+ * исключает дедлок "все слоты заняты не-инфраструктурными зданиями — новую
+ * инфраструктуру, которая единственная открывает слоты, построить негде".
+ */
+export function hasFreeInfrastructureSlot(state: GameState, regionId: string): boolean {
+  const economy = state.regionEconomies[regionId];
+  if (!economy) return false;
+  const pendingGain =
+    state.industries.filter(
+      (i) => i.regionId === regionId && i.sector === "infrastructure" && i.status === "building",
+    ).length * TUNING.infrastructureBuild.levelGainPerProject;
+  return economy.infrastructureLevel + pendingGain < 100;
+}
+
+export function canBuildInRegion(
+  state: GameState,
+  sector: IndustrySector,
+  regionId: string,
+): boolean {
+  return sector === "infrastructure"
+    ? hasFreeInfrastructureSlot(state, regionId)
+    : hasFreeProductionSlot(state, regionId);
 }
 
 export function startBuildingIndustry(
@@ -59,10 +131,15 @@ export function startBuildingIndustry(
   regionId: string,
 ): GameState {
   const def = INDUSTRY_DEFS[sector];
+  const region = REGIONS_BY_ID.get(regionId);
+  const economy = state.regionEconomies[regionId];
+  if (!region || !economy) return state;
   if (!canAffordIndustry(state, sector, regionId)) return state;
+  if (!canBuildInRegion(state, sector, regionId)) return state;
 
-  const buildCost = effectiveBuildCost(sector, regionId);
-  const buildTurns = effectiveBuildTurns(sector, regionId);
+  const buildCost = effectiveBuildCost(state, sector, regionId);
+  const buildTurns = effectiveBuildTurns(state, sector, regionId);
+  const { jobs, outputContribution } = computeJobsAndOutput(sector, region, economy);
 
   industryCounter += 1;
   const industry: Industry = {
@@ -72,10 +149,11 @@ export function startBuildingIndustry(
     label: def.label,
     status: "building",
     turnsRemaining: buildTurns,
-    jobs: def.jobs,
-    outputContribution: def.outputContribution,
+    jobs,
+    outputContribution,
     maintenanceCost: def.maintenanceCost,
     exportVolumeContribution: def.exportVolumeContribution,
+    origin: "built",
   };
 
   return {
@@ -88,8 +166,10 @@ export function startBuildingIndustry(
 
 export interface ConstructionResult {
   industries: Industry[];
-  newlyCompletedJobs: number;
-  newlyCompletedJobsByRegion: Record<string, number>;
+  /** Число завершённых в этом ходу проектов сектора infrastructure — по
+   * региону; каждый поднимает RegionEconomy.infrastructureLevel на
+   * TUNING.infrastructureBuild.levelGainPerProject (см. regionEconomy.ts). */
+  newlyCompletedInfrastructureByRegion: Record<string, number>;
   logEntries: string[];
 }
 
@@ -97,30 +177,36 @@ export interface ConstructionResult {
 export function advanceConstruction(
   industries: Industry[],
 ): ConstructionResult {
-  let newlyCompletedJobs = 0;
-  const newlyCompletedJobsByRegion: Record<string, number> = {};
+  const newlyCompletedInfrastructureByRegion: Record<string, number> = {};
   const logEntries: string[] = [];
 
   const next = industries.map((industry) => {
     if (industry.status === "operational") return industry;
     const turnsRemaining = industry.turnsRemaining - 1;
     if (turnsRemaining <= 0) {
-      newlyCompletedJobs += industry.jobs;
-      newlyCompletedJobsByRegion[industry.regionId] =
-        (newlyCompletedJobsByRegion[industry.regionId] ?? 0) + industry.jobs;
+      if (industry.sector === "infrastructure") {
+        newlyCompletedInfrastructureByRegion[industry.regionId] =
+          (newlyCompletedInfrastructureByRegion[industry.regionId] ?? 0) + 1;
+      }
       logEntries.push(`Завершено строительство: ${industry.label}.`);
       return { ...industry, status: "operational" as const, turnsRemaining: 0 };
     }
     return { ...industry, turnsRemaining };
   });
 
-  return { industries: next, newlyCompletedJobs, newlyCompletedJobsByRegion, logEntries };
+  return { industries: next, newlyCompletedInfrastructureByRegion, logEntries };
 }
 
 export function totalOperationalOutput(industries: Industry[]): number {
   return industries
     .filter((i) => i.status === "operational")
     .reduce((acc, i) => acc + i.outputContribution, 0);
+}
+
+export function totalOperationalJobs(industries: Industry[]): number {
+  return industries
+    .filter((i) => i.status === "operational")
+    .reduce((acc, i) => acc + i.jobs, 0);
 }
 
 export interface IndustryGrouping {

@@ -37,13 +37,14 @@ export interface Region {
   /** Реальные соседи, но только внутри текущего набора регионов (см. план). */
   neighbors: string[];
   /**
-   * Статический сид-показатель качества инфраструктуры, 15-95, выведенный
-   * один раз из стартового gdpIndex региона (см. src/regions/data.ts) и
-   * неизменный до конца партии — влияет на скорость/стоимость стройки
-   * (src/engine/industries.ts), но сам по себе не строится/не обновляется
-   * на этом этапе.
+   * Стартовая точка (не константа на всю игру) качества инфраструктуры,
+   * 15-95, выведенная один раз из стартового gdpIndex региона (см.
+   * src/regions/data.ts). Живое, растущее по ходу игры значение —
+   * state.regionEconomies[id].infrastructureLevel — сеется отсюда при
+   * createInitialState и дальше обновляется независимо (инфраструктура
+   * теперь строимый объект, см. src/engine/industries.ts).
    */
-  infrastructureLevel: number;
+  infrastructureSeed: number;
 }
 
 /** Живое, симулируемое по ходам экономическое состояние одного региона. */
@@ -52,10 +53,10 @@ export interface RegionEconomy {
   unemploymentRate: number;
   corruptionIndex: number;
   /**
-   * Накопленная часть gdpIndex, происходящая именно от построенных в
-   * регионе предприятий (растёт параллельно gdpIndex той же формулой —
-   * см. advanceRegionEconomies). "Базовая экономика" региона выводится
-   * как gdpIndex - industryGdpIndex, отдельно не хранится.
+   * Живой, строимый уровень инфраструктуры, 0-100. Растёт при завершении
+   * строек сектора "infrastructure" (см. advanceRegionEconomies) и влияет
+   * на скорость/стоимость любой стройки в этом регионе, а также на число
+   * доступных производственных слотов (см. src/engine/industries.ts).
    */
-  industryGdpIndex: number;
+  infrastructureLevel: number;
 }

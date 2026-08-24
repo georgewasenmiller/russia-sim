@@ -14,6 +14,7 @@ function makeIndustry(overrides: Partial<Industry>): Industry {
     outputContribution: 0.1,
     maintenanceCost: 0.1,
     exportVolumeContribution: 0,
+    origin: "built",
     ...overrides,
   };
 }

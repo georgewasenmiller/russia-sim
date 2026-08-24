@@ -1,11 +1,11 @@
-import { AVG_REGION_POPULATION, CLAMP, TUNING, clamp } from "./constants";
+import { CLAMP, TUNING, clamp, regionLaborForce } from "./constants";
 import {
   gaussianNoise,
   potentialGrowth,
   sanctionsGrowthDrag,
   sumModifier,
 } from "./formulas";
-import { totalOperationalOutput } from "./industries";
+import { totalOperationalJobs, totalOperationalOutput } from "./industries";
 import { computeMigrationDeltas, tradeGrowthBonus } from "./regionLinks";
 import type { GameState, Industry } from "./types";
 import { REGIONS } from "../regions/data";
@@ -23,111 +23,97 @@ function isAgriculture(region: Region): boolean {
 }
 
 /**
- * Рост региона: тот же общий фон, что и в nextGrowth (общестрановые
- * налог/инфляция/недовольство/санкции — одинаковы для всех регионов), плюс
- * собственные факторы региона (выпуск его заводов, его коррупция, его
- * специализация).
+ * Множитель отдачи построек региона: здания (buildingsOutput, см.
+ * advanceRegionEconomies) остаются единственным источником выпуска, этот
+ * множитель лишь модулирует, насколько продуктивно он конвертируется в
+ * ВВП — налоги/инфляция/недовольство/коррупция/санкции тянут вниз, реформы/
+ * торговля с соседями/цена нефти для oil-gas региона/общий тренд
+ * производительности — вверх. Жёстко клампится (TUNING.regionMacro.floor/
+ * ceiling), чтобы даже одновременный удар всех штрафов не мог обнулить или
+ * обратить в отрицательное ВВП региона за один ход.
  */
-export function nextRegionGrowth(
+export function regionMacroMultiplier(
   region: Region,
   economy: RegionEconomy,
-  regionIndustries: Industry[],
   state: GameState,
   oilPrice: number,
 ): number {
-  const potential = potentialGrowth(state);
+  // potentialGrowth()/tradeGrowthBonus()/сумма реформенных модификаторов
+  // gdpGrowthRateAnnual откалиброваны для старой модели (доли годового
+  // темпа роста, диапазон ±25) — делим на эту константу, чтобы получить
+  // разумные по масштабу доли множителя выпуска (~0.35-1.5).
+  const divisor = TUNING.regionMacro.legacyPointsToFractionDivisor;
+  const productivityTrend = potentialGrowth(state) / divisor;
 
   const taxDrag =
-    TUNING.growth.taxDragCoefficient *
-    Math.max(state.sliders.taxBurden - 25, 0);
+    TUNING.regionMacro.taxDragCoefficient * Math.max(state.sliders.taxBurden - 25, 0);
 
   const inflationExcess = Math.max(
-    state.inflationRateAnnual - TUNING.growth.inflationDragThreshold,
+    state.inflationRateAnnual - TUNING.regionMacro.inflationDragThreshold,
     0,
   );
-  const inflationDrag = TUNING.growth.inflationDragCoefficient * inflationExcess;
+  const inflationDrag = TUNING.regionMacro.inflationDragCoefficient * inflationExcess;
 
-  const unrestDrag = TUNING.growth.unrestDragCoefficient * state.socialUnrest;
-  const sanctionsDrag = sanctionsGrowthDrag(state.sanctions);
-
-  const operationalCount = regionIndustries.filter(
-    (i) => i.status === "operational",
-  ).length;
-  const industryBoost =
-    TUNING.regionGrowth.industryBoostCoefficient *
-    Math.min(operationalCount, TUNING.regionGrowth.industryBoostCap);
+  const unrestDrag = TUNING.regionMacro.unrestDragCoefficient * state.socialUnrest;
+  const sanctionsDrag = sanctionsGrowthDrag(state.sanctions) / divisor;
 
   const corruptionDrag =
-    TUNING.regionGrowth.corruptionDragCoefficient *
-    (economy.corruptionIndex / 100);
+    TUNING.regionMacro.corruptionDragCoefficient * (economy.corruptionIndex / 100);
 
   const oilSensitivity = isOilOrGas(region)
-    ? TUNING.regionGrowth.oilSensitivityCoefficient *
-      (oilPrice - state.oilPriceMeanTarget)
+    ? TUNING.regionMacro.oilSensitivityCoefficient * (oilPrice - state.oilPriceMeanTarget)
     : 0;
 
   // Торговля излишками сырья: соседи считаются по снимку на начало хода
   // (state.regionEconomies ещё не тронут этим ходом), так что бонус не
   // зависит от порядка обработки регионов в advanceRegionEconomies.
-  const tradeBonus = tradeGrowthBonus(region, state.regionEconomies);
+  const tradeBonus = tradeGrowthBonus(region, state.regionEconomies) / divisor;
 
   const reformModifier =
-    sumModifier(state, "gdpGrowthRateAnnual") *
-    (isAgriculture(region) ? TUNING.regionGrowth.agricultureReformDamping : 1);
+    (sumModifier(state, "gdpGrowthRateAnnual") / divisor) *
+    (isAgriculture(region) ? TUNING.regionMacro.agricultureReformDamping : 1);
 
   const noiseStdDev =
-    TUNING.regionGrowth.noiseStdDev *
-    (isAgriculture(region) ? TUNING.regionGrowth.agricultureStabilityFactor : 1);
+    TUNING.regionMacro.noiseStdDev *
+    (isAgriculture(region) ? TUNING.regionMacro.agricultureStabilityFactor : 1);
 
-  const next =
-    potential -
+  const raw =
+    1 +
+    productivityTrend -
     taxDrag -
     inflationDrag -
     unrestDrag -
     sanctionsDrag -
     corruptionDrag +
-    industryBoost +
     oilSensitivity +
     tradeBonus +
     reformModifier +
     gaussianNoise(noiseStdDev);
 
-  return clamp(next, CLAMP.gdpGrowth);
+  return clamp(raw, [TUNING.regionMacro.floor, TUNING.regionMacro.ceiling]);
 }
 
-/** Безработица региона: закон Оукена + прямой эффект рабочих мест его заводов. */
-export function nextRegionUnemployment(
+/**
+ * Целевая безработица региона — строго от дефицита рабочих мест:
+ * трудоспособное население минус сумма рабочих мест на всех действующих
+ * предприятиях региона (включая инфраструктурные, если уже эксплуатируются
+ * — см. план п.5). Не абстрактная формула роста, прямое соотношение.
+ */
+export function targetRegionUnemployment(
   region: Region,
-  economy: RegionEconomy,
-  regionGrowth: number,
-  newlyCompletedRegionJobs: number,
-  state: GameState,
+  regionIndustries: Industry[],
 ): number {
-  const potential = potentialGrowth(state);
-  const growthGap = regionGrowth - potential;
-  const fromOkun = -TUNING.unemployment.okunCoefficient * (growthGap / 4);
-
-  const populationRatio = clamp(
-    region.population / AVG_REGION_POPULATION,
-    TUNING.regionUnemployment.populationRatioClamp,
-  );
-  const fromJobs =
-    -newlyCompletedRegionJobs /
-    (TUNING.unemployment.jobsToRateDivisor * populationRatio);
-
-  const reversion =
-    TUNING.unemployment.meanReversion *
-    (TUNING.unemployment.naturalRate - economy.unemploymentRate);
-
-  const next = economy.unemploymentRate + fromOkun + fromJobs + reversion;
-  return clamp(next, CLAMP.unemployment);
+  const laborForce = regionLaborForce(region);
+  const jobs = totalOperationalJobs(regionIndustries);
+  return clamp(((laborForce - jobs) / laborForce) * 100, CLAMP.unemployment);
 }
 
 /**
  * Коррупция региона: дрейфует к собственному сид-значению региона (не к
  * общему нацбазису), плюс тот же национальный реформенный модификатор, что
  * и раньше действовал только на state.corruption — так антикоррупционная
- * реформа задевает все регионы разом.
+ * реформа задевает все регионы разом. Не входит в объём этого этапа — не
+ * зависит ни от построек, ни от роста/безработицы, не меняется.
  */
 export function nextRegionCorruption(
   region: Region,
@@ -157,7 +143,7 @@ export function nextRegionCorruption(
 export function advanceRegionEconomies(
   state: GameState,
   oilPrice: number,
-  newlyCompletedJobsByRegion: Record<string, number>,
+  newlyCompletedInfrastructureByRegion: Record<string, number>,
 ): Record<string, RegionEconomy> {
   const next: Record<string, RegionEconomy> = {};
 
@@ -171,29 +157,42 @@ export function advanceRegionEconomies(
       (i) => i.regionId === region.id,
     );
 
-    const growth = nextRegionGrowth(region, economy, regionIndustries, state, oilPrice);
-    const industryFlow = totalOperationalOutput(regionIndustries) * 0.25;
-    const gdpIndex = economy.gdpIndex * (1 + growth / 400) + industryFlow;
-    // Параллельный трекинг доли gdpIndex, происходящей от построек — той
-    // же формулой, что и gdpIndex целиком (см. план). baseGdpIndex
-    // (gdpIndex - industryGdpIndex) выводится в economyMetrics.ts, не
-    // хранится.
-    const industryGdpIndex = economy.industryGdpIndex * (1 + growth / 400) + industryFlow;
+    // Инфраструктура — строимый объект: завершённые в этом ходу проекты
+    // сектора infrastructure поднимают живой уровень (кламп 0-100).
+    const infrastructureLevel = clamp(
+      economy.infrastructureLevel +
+        (newlyCompletedInfrastructureByRegion[region.id] ?? 0) *
+          TUNING.infrastructureBuild.levelGainPerProject,
+      CLAMP.percent,
+    );
 
+    // ВВП региона — только от зданий (buildingsOutput), плюс два узких
+    // исключения: множитель продуктивности (не источник, а модулятор — см.
+    // regionMacroMultiplier) и небольшая нефтегазовая рента для регионов с
+    // соответствующей специализацией.
+    const buildingsOutput = totalOperationalOutput(regionIndustries);
+    const macroMultiplier = regionMacroMultiplier(region, economy, state, oilPrice);
+    const oilGasRent = isOilOrGas(region)
+      ? TUNING.oilGasRent.coefficient *
+        Math.max(oilPrice - TUNING.oilGasRent.referencePrice, 0)
+      : 0;
+    const gdpIndex = buildingsOutput * macroMultiplier + oilGasRent;
+
+    // Безработица — целевое значение считается строго по дефициту рабочих
+    // мест; фактическое движется к цели за 2-3 хода (не телепортируется в
+    // тот же ход, что здание достроилось), плюс независимая миграционная
+    // дельта поверх — тот же принцип "постепенно", что и в regionLinks.ts.
+    const target = targetRegionUnemployment(region, regionIndustries);
     const unemploymentRate = clamp(
-      nextRegionUnemployment(
-        region,
-        economy,
-        growth,
-        newlyCompletedJobsByRegion[region.id] ?? 0,
-        state,
-      ) + migrationDeltas[region.id],
+      economy.unemploymentRate +
+        TUNING.regionUnemployment.adjustmentSpeed * (target - economy.unemploymentRate) +
+        migrationDeltas[region.id],
       CLAMP.unemployment,
     );
 
     const corruptionIndex = nextRegionCorruption(region, economy, state, oilPrice);
 
-    next[region.id] = { gdpIndex, unemploymentRate, corruptionIndex, industryGdpIndex };
+    next[region.id] = { gdpIndex, unemploymentRate, corruptionIndex, infrastructureLevel };
   }
 
   return next;

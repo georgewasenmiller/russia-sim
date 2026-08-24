@@ -71,14 +71,14 @@ describe("colorScale", () => {
 
 describe("infrastructureColor (режим карты «Застройка»)", () => {
   it("returns a valid hex color at the domain boundaries", () => {
-    const [min, max] = numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+    const [min, max] = numericDomain(REGIONS.map((r) => r.infrastructureSeed));
     expect(infrastructureColor(min, min, max)).toMatch(/^#[0-9a-f]{6}$/);
     expect(infrastructureColor(max, min, max)).toMatch(/^#[0-9a-f]{6}$/);
   });
 
   it("uses a visibly different palette from gdpColor at the same relative position", () => {
     const [gMin, gMax] = gdpDomain(REGIONS.map((r) => r.gdpIndex));
-    const [iMin, iMax] = numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+    const [iMin, iMax] = numericDomain(REGIONS.map((r) => r.infrastructureSeed));
     const midGdp = gdpColor((gMin + gMax) / 2, gMin, gMax);
     const midInfra = infrastructureColor((iMin + iMax) / 2, iMin, iMax);
     expect(midInfra).not.toBe(midGdp);

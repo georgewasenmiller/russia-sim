@@ -148,7 +148,9 @@ export function RegionsMap({
   const [gdpMin, gdpMax] = gdpDomain(
     REGIONS.map((r) => state.regionEconomies[r.id].gdpIndex),
   );
-  const [infraMin, infraMax] = numericDomain(REGIONS.map((r) => r.infrastructureLevel));
+  const [infraMin, infraMax] = numericDomain(
+    REGIONS.map((r) => state.regionEconomies[r.id].infrastructureLevel),
+  );
 
   const industriesByRegion = useMemo(() => {
     const map = new Map<string, Industry[]>();
@@ -174,9 +176,9 @@ export function RegionsMap({
 
   function fillFor(regionId: string): string {
     if (mapMode === "infrastructure") {
-      const region = REGIONS.find((r) => r.id === regionId);
-      return region
-        ? infrastructureColor(region.infrastructureLevel, infraMin, infraMax)
+      const economy = state.regionEconomies[regionId];
+      return economy
+        ? infrastructureColor(economy.infrastructureLevel, infraMin, infraMax)
         : "#232838";
     }
     return gdpColor(state.regionEconomies[regionId].gdpIndex, gdpMin, gdpMax);
@@ -387,7 +389,7 @@ export function RegionsMap({
         >
           <div className="mb-1 font-semibold text-slate-100">{tooltipRegion.name}</div>
           <div className="mb-1.5 text-slate-400">
-            Инфраструктура: {tooltipRegion.infrastructureLevel.toFixed(0)}/100
+            Инфраструктура: {state.regionEconomies[tooltipRegion.id].infrastructureLevel.toFixed(0)}/100
           </div>
           {Object.keys(tooltipGrouping.operational).length > 0 && (
             <div className="mb-1">
