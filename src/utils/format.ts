@@ -28,8 +28,12 @@ export function fmtNum(value: number, digits = 0): string {
   return value.toFixed(digits);
 }
 
-export function fmtQuarterDate(year: number, quarter: number): string {
-  return `${quarter} кв. ${year}`;
+/** "осталось 12 дн. 6 ч." / "осталось 6 ч." — для прогресса строек. */
+export function fmtRemainingDuration(days: number): string {
+  const clamped = Math.max(days, 0);
+  const wholeDays = Math.floor(clamped);
+  const hours = Math.round((clamped - wholeDays) * 24);
+  return wholeDays > 0 ? `осталось ${wholeDays} дн. ${hours} ч.` : `осталось ${hours} ч.`;
 }
 
 export type MetricSeverity = "ok" | "warn" | "critical";

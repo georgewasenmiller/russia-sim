@@ -11,11 +11,12 @@ import { computeBudget } from "./formulas";
 import {
   canAffordIndustry,
   effectiveBuildCost,
-  effectiveBuildTurns,
+  effectiveBuildDays,
   startBuildingIndustry,
 } from "./industries";
 import { canChangeTaxBurden, changeTaxBurden } from "./policy";
-import { processTurn } from "./turnEngine";
+import { DAYS_PER_QUARTER } from "./time";
+import { advanceOneDay } from "./turnEngine";
 import { REGIONS, REGIONS_BY_ID } from "../regions/data";
 
 describe("economyMetrics: $ scale consistency", () => {
@@ -63,7 +64,7 @@ describe("economyMetrics: $ scale consistency", () => {
 describe("computeBudget: sector revenue breakdown", () => {
   it("sector revenues plus base tax revenue sum to taxRevenue, base is never negative", () => {
     const state = createInitialState();
-    const budget = computeBudget(state, state.oilPrice);
+    const budget = computeBudget(state, state.oilPrice, DAYS_PER_QUARTER);
     const sectorSum = Object.values(budget.sectorTaxRevenue).reduce(
       (a, b) => a + (b ?? 0),
       0,
@@ -81,7 +82,7 @@ describe("computeBudget: sector revenue breakdown", () => {
     // соответственно baseTaxRevenue близко к нулю (может быть отсечено
     // защитным полом ровно на границе из-за той же погрешности, это не баг).
     const state = createInitialState();
-    const budget = computeBudget(state, state.oilPrice);
+    const budget = computeBudget(state, state.oilPrice, DAYS_PER_QUARTER);
     expect(budget.baseTaxRevenue).toBeCloseTo(0, 6);
   });
 });
@@ -102,18 +103,18 @@ describe("infrastructure affects construction cost/turns", () => {
 
     const costLow = effectiveBuildCost(state, "manufacturing", lowInfra.id);
     const costHigh = effectiveBuildCost(state, "manufacturing", highInfra.id);
-    const turnsLow = effectiveBuildTurns(state, "manufacturing", lowInfra.id);
-    const turnsHigh = effectiveBuildTurns(state, "manufacturing", highInfra.id);
+    const daysLow = effectiveBuildDays(state, "manufacturing", lowInfra.id);
+    const daysHigh = effectiveBuildDays(state, "manufacturing", highInfra.id);
 
     expect(costHigh).toBeLessThan(costLow);
-    expect(turnsHigh).toBeLessThanOrEqual(turnsLow);
+    expect(daysHigh).toBeLessThanOrEqual(daysLow);
   });
 
-  it("effective build turns never drop below 1", () => {
+  it("effective build days are always positive", () => {
     const state = createInitialState();
     for (const region of REGIONS) {
       for (const sector of ["oil_gas", "manufacturing", "agriculture", "tech", "infrastructure"] as const) {
-        expect(effectiveBuildTurns(state, sector, region.id)).toBeGreaterThanOrEqual(1);
+        expect(effectiveBuildDays(state, sector, region.id)).toBeGreaterThan(0);
       }
     }
   });
@@ -166,13 +167,13 @@ describe("policy: changeTaxBurden costs political points", () => {
 });
 
 describe("multi-turn: buildings-driven GDP stays consistent", () => {
-  it("region GDP stays positive and finite over many turns of active industrialization", () => {
+  it("region GDP stays positive and finite over many days of active industrialization", () => {
     let state = createInitialState();
     const region = REGIONS_BY_ID.get("sverdlovsk")!;
     state = startBuildingIndustry(state, "manufacturing", region.id);
     state = startBuildingIndustry(state, "tech", region.id);
 
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 1000; i++) {
       if (state.gameOver) break;
       if (state.activeEvent) {
         const choice = state.activeEvent.choices[0];
@@ -182,7 +183,7 @@ describe("multi-turn: buildings-driven GDP stays consistent", () => {
         state = { ...state, activeEvent: null };
         continue;
       }
-      state = processTurn(state);
+      state = advanceOneDay(state);
     }
 
     const economy = state.regionEconomies[region.id];

@@ -9,7 +9,10 @@ function makeIndustry(overrides: Partial<Industry>): Industry {
     sector: "manufacturing",
     label: "Test",
     status: "operational",
-    turnsRemaining: 0,
+    startedAtGameDay: 0,
+    completesAtGameDay: 0,
+    localInfraMultiplier: 1,
+    nationalMultiplier: 1,
     jobs: 10,
     outputContribution: 0.1,
     maintenanceCost: 0.1,
@@ -25,12 +28,12 @@ describe("groupIndustriesBySector", () => {
       makeIndustry({ id: "1", sector: "oil_gas", status: "operational" }),
       makeIndustry({ id: "2", sector: "oil_gas", status: "operational" }),
       makeIndustry({ id: "3", sector: "tech", status: "operational" }),
-      makeIndustry({ id: "4", sector: "agriculture", status: "building", turnsRemaining: 2 }),
+      makeIndustry({ id: "4", sector: "agriculture", status: "building", completesAtGameDay: 2 }),
     ];
 
     const grouping = groupIndustriesBySector(industries);
     expect(grouping.operational).toEqual({ oil_gas: 2, tech: 1 });
-    expect(grouping.building).toEqual([{ sector: "agriculture", turnsRemaining: 2 }]);
+    expect(grouping.building).toEqual([{ sector: "agriculture", completesAtGameDay: 2 }]);
   });
 
   it("returns empty grouping for no industries", () => {

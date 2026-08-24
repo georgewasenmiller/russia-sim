@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { TUNING, createInitialState } from "./constants";
 import { computeMigrationDeltas, tradeGrowthBonus } from "./regionLinks";
-import { processTurn } from "./turnEngine";
+import { advanceOneDay } from "./turnEngine";
+import { DAYS_PER_QUARTER } from "./time";
 import { REGIONS, REGIONS_BY_ID } from "../regions/data";
+
+// Тесты вызывают tradeGrowthBonus/computeMigrationDeltas с days=DAYS_PER_QUARTER
+// — тождественно воспроизводит прежние (дотикового этапа) квартальные
+// величины (см. src/engine/time.ts: flowScale(x, 90) === x), так что все
+// существующие пороги/ожидания ниже остаются в силе без пересчёта.
 
 describe("tradeGrowthBonus", () => {
   it("gives a resource-less region a bonus from a resource-specialized neighbor", () => {
     const state = createInitialState();
     const sverdlovsk = REGIONS_BY_ID.get("sverdlovsk")!; // metals+industry, neighbours khanty_mansi (oil)
     expect(sverdlovsk.specializations).not.toContain("oil");
-    const bonus = tradeGrowthBonus(sverdlovsk, state.regionEconomies);
+    const bonus = tradeGrowthBonus(sverdlovsk, state.regionEconomies, DAYS_PER_QUARTER);
     expect(bonus).toBeGreaterThan(0);
   });
 
@@ -17,7 +23,7 @@ describe("tradeGrowthBonus", () => {
     const state = createInitialState();
     const moscow = REGIONS_BY_ID.get("moscow")!; // единственный сосед — moscow_oblast (industry+tech)
     expect(moscow.neighbors).toEqual(["moscow_oblast"]);
-    const bonus = tradeGrowthBonus(moscow, state.regionEconomies);
+    const bonus = tradeGrowthBonus(moscow, state.regionEconomies, DAYS_PER_QUARTER);
     expect(bonus).toBe(0);
   });
 
@@ -33,7 +39,7 @@ describe("tradeGrowthBonus", () => {
     if (hasOilNeighbor) {
       // Бонус может быть > 0 только за счёт ДРУГИХ типов сырья, которых у
       // Татарстана нет (gas/coal/metals) — не за счёт oil.
-      const bonus = tradeGrowthBonus(tatarstan, state.regionEconomies);
+      const bonus = tradeGrowthBonus(tatarstan, state.regionEconomies, DAYS_PER_QUARTER);
       const otherTypesOnly = tatarstan.neighbors.some((id) => {
         const n = REGIONS_BY_ID.get(id);
         return (
@@ -55,7 +61,7 @@ describe("tradeGrowthBonus", () => {
     expect(sverdlovsk.neighbors).toContain("khanty_mansi");
     expect(sverdlovsk.neighbors).toContain("tyumen_south");
 
-    const bonusWithBoth = tradeGrowthBonus(sverdlovsk, state.regionEconomies);
+    const bonusWithBoth = tradeGrowthBonus(sverdlovsk, state.regionEconomies, DAYS_PER_QUARTER);
 
     // Убираем более слабого нефтяного соседа из расчёта, оставляя только
     // сильного — бонус не должен уменьшиться (сумма не участвует).
@@ -66,6 +72,7 @@ describe("tradeGrowthBonus", () => {
     const bonusWithoutWeak = tradeGrowthBonus(
       sverdlovsk,
       economiesWithoutWeakNeighbor,
+      DAYS_PER_QUARTER,
     );
 
     expect(bonusWithBoth).toBeCloseTo(bonusWithoutWeak, 6);
@@ -82,7 +89,7 @@ describe("tradeGrowthBonus", () => {
       ]),
     );
     for (const region of REGIONS) {
-      const bonus = tradeGrowthBonus(region, inflated);
+      const bonus = tradeGrowthBonus(region, inflated, DAYS_PER_QUARTER);
       expect(bonus).toBeLessThanOrEqual(TUNING.trade.maxTotalBonus + 1e-9);
     }
   });
@@ -100,7 +107,7 @@ describe("computeMigrationDeltas", () => {
       [neighborId]: { ...state.regionEconomies[neighborId], unemploymentRate: 4 },
     };
 
-    const deltas = computeMigrationDeltas(economies);
+    const deltas = computeMigrationDeltas(economies, DAYS_PER_QUARTER);
     expect(deltas[sverdlovsk.id]).toBeLessThan(0);
     // Реципиент ниже естественного уровня (naturalRate=6) — приток снижает
     // его безработицу ещё сильнее (ветка дефицита кадров).
@@ -116,7 +123,7 @@ describe("computeMigrationDeltas", () => {
       REGIONS.map((r) => [r.id, { ...state.regionEconomies[r.id], unemploymentRate: 8 }]),
     );
 
-    const deltas = computeMigrationDeltas(economies);
+    const deltas = computeMigrationDeltas(economies, DAYS_PER_QUARTER);
     for (const region of REGIONS) {
       expect(deltas[region.id]).toBe(0);
     }
@@ -129,7 +136,7 @@ describe("computeMigrationDeltas", () => {
       ...atThreshold[sverdlovsk.id],
       unemploymentRate: 8 + TUNING.migration.gapThreshold,
     };
-    const deltasAtThreshold = computeMigrationDeltas(atThreshold);
+    const deltasAtThreshold = computeMigrationDeltas(atThreshold, DAYS_PER_QUARTER);
     expect(deltasAtThreshold[sverdlovsk.id]).toBe(0);
     expect(deltasAtThreshold[neighborId]).toBe(0);
   });
@@ -145,7 +152,7 @@ describe("computeMigrationDeltas", () => {
       [neighborId]: { ...state.regionEconomies[neighborId], unemploymentRate: 12 }, // выше natural rate
     };
 
-    const deltas = computeMigrationDeltas(economies);
+    const deltas = computeMigrationDeltas(economies, DAYS_PER_QUARTER);
     expect(deltas[neighborId]).toBeGreaterThan(0);
     expect(deltas[neighborId]).toBeLessThan(Math.abs(deltas[sverdlovsk.id]));
   });
@@ -159,14 +166,14 @@ describe("computeMigrationDeltas", () => {
       economies[neighborId] = { ...economies[neighborId], unemploymentRate: 39 };
     }
 
-    const deltas = computeMigrationDeltas(economies);
+    const deltas = computeMigrationDeltas(economies, DAYS_PER_QUARTER);
     expect(Math.abs(deltas[hub.id])).toBeLessThanOrEqual(
       TUNING.migration.maxTotalDeltaPerTurn + 1e-9,
     );
   });
 });
 
-describe("trade/migration integration: gradualness over several turns", () => {
+describe("trade/migration integration: gradualness over many days", () => {
   it("narrows an artificial unemployment gap between real neighbors gradually, not instantly", () => {
     let state = createInitialState();
     const sverdlovsk = REGIONS_BY_ID.get("sverdlovsk")!;
@@ -185,18 +192,18 @@ describe("trade/migration integration: gradualness over several turns", () => {
       state.regionEconomies[sverdlovsk.id].unemploymentRate -
       state.regionEconomies[neighborId].unemploymentRate;
 
-    // Один ход не должен закрыть разрыв полностью — ни сходимость к целевой
-    // безработице (adjustmentSpeed), ни миграция сами по себе не
+    // Один суточный тик не должен закрыть разрыв полностью — ни сходимость
+    // к целевой безработице (adjustmentSpeed), ни миграция сами по себе не
     // телепортируют значение мгновенно.
-    let next = processTurn(state);
+    let next = advanceOneDay(state);
     while (next.activeEvent) {
       next = { ...next, activeEvent: null };
-      next = processTurn(next);
+      next = advanceOneDay(next);
     }
-    const gapAfterOneTurn =
+    const gapAfterOneDay =
       next.regionEconomies[sverdlovsk.id].unemploymentRate -
       next.regionEconomies[neighborId].unemploymentRate;
-    expect(gapAfterOneTurn).toBeGreaterThan(0);
-    expect(gapAfterOneTurn).toBeLessThan(initialGap);
+    expect(gapAfterOneDay).toBeGreaterThan(0);
+    expect(gapAfterOneDay).toBeLessThan(initialGap);
   });
 });

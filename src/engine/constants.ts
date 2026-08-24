@@ -2,7 +2,7 @@ import { REGIONS } from "../regions/data";
 import type { Region, RegionEconomy } from "../regions/types";
 import type { GameState, Industry, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {
@@ -423,7 +423,10 @@ function seedLegacyIndustries(region: Region): Industry[] {
       sector,
       label: def.label,
       status: "operational",
-      turnsRemaining: 0,
+      startedAtGameDay: 0,
+      completesAtGameDay: 0,
+      localInfraMultiplier: 1,
+      nationalMultiplier: 1,
       jobs,
       outputContribution,
       maintenanceCost: def.maintenanceCost,
@@ -494,6 +497,9 @@ export function createInitialState(): GameState {
 
   return {
     saveVersion: SAVE_VERSION,
+    gameTimeDays: 0,
+    gameSpeedLevel: 2,
+    isPaused: true,
     turn: 1,
     year: 2000,
     quarter: 1,

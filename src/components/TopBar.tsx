@@ -3,12 +3,14 @@ import {
   Coins,
   Droplet,
   Landmark,
+  Pause,
   Receipt,
   ScrollText,
   Sliders,
 } from "lucide-react";
+import { GAME_SPEEDS, fmtGameDate, gameDateFromDays } from "../engine/time";
 import { useGame } from "../state/GameContext";
-import { fmtQuarterDate, fmtUsdBn } from "../utils/format";
+import { fmtUsdBn } from "../utils/format";
 
 export function TopBar({
   onOpenReforms,
@@ -24,6 +26,7 @@ export function TopBar({
   const { state, dispatch } = useGame();
 
   const canAdvance = !state.gameOver && !state.activeEvent;
+  const gameDate = gameDateFromDays(state.gameTimeDays);
 
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
@@ -32,7 +35,7 @@ export function TopBar({
           Россия: экономика и власть
         </h1>
         <span className="rounded bg-slate-800 px-2 py-1 text-sm text-slate-300">
-          {fmtQuarterDate(state.year, state.quarter)} · ход {state.turn}
+          {fmtGameDate(gameDate)}
         </span>
       </div>
 
@@ -98,14 +101,41 @@ export function TopBar({
           Реформы
         </button>
 
-        <button
-          type="button"
-          disabled={!canAdvance}
-          onClick={() => dispatch({ type: "NEXT_TURN" })}
-          className="rounded-md bg-violet-600 px-4 py-2 font-medium text-white shadow transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-        >
-          Следующий ход
-        </button>
+        <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-1">
+          <button
+            type="button"
+            disabled={!canAdvance}
+            onClick={() => dispatch({ type: "SET_PAUSED", paused: !state.isPaused })}
+            title={state.isPaused ? "Продолжить" : "Пауза"}
+            aria-label={state.isPaused ? "Продолжить" : "Пауза"}
+            className={`rounded px-2 py-1.5 transition ${
+              state.isPaused
+                ? "bg-violet-600 text-white"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            <Pause size={16} />
+          </button>
+          {GAME_SPEEDS.map((speed) => (
+            <button
+              key={speed.level}
+              type="button"
+              disabled={!canAdvance}
+              onClick={() => {
+                dispatch({ type: "SET_SPEED", level: speed.level });
+                if (state.isPaused) dispatch({ type: "SET_PAUSED", paused: false });
+              }}
+              title={speed.label}
+              className={`rounded px-2 py-1.5 text-xs font-medium transition ${
+                !state.isPaused && state.gameSpeedLevel === speed.level
+                  ? "bg-violet-600 text-white"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              {"▶".repeat(speed.level)}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

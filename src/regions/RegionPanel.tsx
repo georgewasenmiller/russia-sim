@@ -9,14 +9,14 @@ import {
   canAffordIndustry,
   canBuildInRegion,
   effectiveBuildCost,
-  effectiveBuildTurns,
+  effectiveBuildDays,
   hasFreeInfrastructureSlot,
   hasFreeProductionSlot,
   totalOperationalJobs,
 } from "../engine/industries";
 import { useGame } from "../state/GameContext";
 import type { GameState, IndustrySector } from "../engine/types";
-import { fmtUsdAuto, fmtUsdBn, fmtUsdPerCapita } from "../utils/format";
+import { fmtRemainingDuration, fmtUsdAuto, fmtUsdBn, fmtUsdPerCapita } from "../utils/format";
 import { REGIONS } from "./data";
 import type { Specialization } from "./types";
 
@@ -204,9 +204,32 @@ export function RegionPanel({
                   )}
                 </span>
                 {ind.status === "building" ? (
-                  <span className="flex items-center gap-1 text-amber-400">
-                    <Hammer size={14} /> {ind.turnsRemaining} ход(а/ов)
-                  </span>
+                  <div
+                    className="flex w-36 flex-col items-end gap-1"
+                    title={`Локальная инфраструктура региона: ×${ind.localInfraMultiplier.toFixed(2)} · Промышленная база страны: ×${ind.nationalMultiplier.toFixed(2)}`}
+                  >
+                    <span className="flex items-center gap-1 text-xs text-amber-400">
+                      <Hammer size={12} />
+                      {fmtRemainingDuration(ind.completesAtGameDay - state.gameTimeDays)}
+                    </span>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
+                      <div
+                        className="h-full bg-amber-400"
+                        style={{
+                          width: `${
+                            Math.min(
+                              1,
+                              Math.max(
+                                0,
+                                (state.gameTimeDays - ind.startedAtGameDay) /
+                                  Math.max(ind.completesAtGameDay - ind.startedAtGameDay, 1e-6),
+                              ),
+                            ) * 100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
                 ) : (
                   <span className="text-emerald-400">
                     работает · +{ind.jobs}тыс. раб. мест ·{" "}
@@ -242,7 +265,7 @@ export function RegionPanel({
                 </span>
                 <span className="text-slate-400">
                   {fmtUsdBn(effectiveBuildCost(state, sector, region.id))} ·{" "}
-                  {effectiveBuildTurns(state, sector, region.id)} хода
+                  {Math.round(effectiveBuildDays(state, sector, region.id))} дн.
                 </span>
                 {disabledReason && (
                   <span className="text-[10px] text-rose-400">{disabledReason}</span>

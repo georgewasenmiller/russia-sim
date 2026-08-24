@@ -20,27 +20,38 @@ import { advanceConstruction } from "./industries";
 import { advanceRegionEconomies } from "./regionEconomy";
 import { rollForEvent } from "./events";
 import { tickModifiers } from "./reforms";
+import { DAYS_PER_QUARTER, DAYS_PER_YEAR } from "./time";
 import type { GameState, Quarter, TurnSnapshot } from "./types";
 
 const GAME_OVER_UNREST_THRESHOLD = 95;
 const GAME_OVER_APPROVAL_THRESHOLD = 5;
 
-function nextDate(year: number, quarter: Quarter): { year: number; quarter: Quarter } {
-  if (quarter === 4) return { year: year + 1, quarter: 1 };
-  return { year, quarter: (quarter + 1) as Quarter };
-}
+/** Внутренний тик экономики — фиксированно 1 игровые сутки (см. план
+ * "Непрерывный игровой календарь..."). Скорость меняет только реальный
+ * интервал между вызовами advanceOneDay, не размер самого шага. */
+const DAYS = 1;
 
-export function processTurn(prev: GameState): GameState {
+/**
+ * Продвигает игру на DAYS игровых суток. Экономика (ВВП/бюджет/инфляция/
+ * недовольство/одобрение/регионы) тикает КАЖДЫЙ вызов — квартальные
+ * формулы пересчитаны на суточный тик (см. formulas.ts/regionEconomy.ts/
+ * regionLinks.ts и src/engine/time.ts). События/реформы/история/turn-
+ * year-quarter — по-прежнему квартальной каденции, но триггер теперь
+ * "пересечена граница условного 90-дневного квартала", а не "нажали
+ * кнопку" (сами reforms.ts/events.ts не меняются).
+ */
+export function advanceOneDay(prev: GameState): GameState {
   if (prev.gameOver || prev.activeEvent) return prev;
 
   const logEntries: string[] = [];
+  const gameTimeDays = prev.gameTimeDays + DAYS;
 
   // 1. Цена нефти
-  const oilPrice = nextOilPrice(prev);
+  const oilPrice = nextOilPrice(prev, DAYS);
   const oilPriceDelta = oilPrice - prev.oilPrice;
 
-  // 2. Стройки
-  const construction = advanceConstruction(prev.industries);
+  // 2. Стройки — абсолютная метка завершения, не декремент (см. план).
+  const construction = advanceConstruction(prev.industries, gameTimeDays);
   logEntries.push(...construction.logEntries);
 
   const stateWithConstruction: GameState = {
@@ -48,9 +59,9 @@ export function processTurn(prev: GameState): GameState {
     industries: construction.industries,
   };
 
-  // 3-5. Бюджет и финансирование
-  const budget = computeBudget(stateWithConstruction, oilPrice);
-  const financing = computeFinancing(stateWithConstruction, budget);
+  // 3-5. Бюджет и финансирование за DAYS суток
+  const budget = computeBudget(stateWithConstruction, oilPrice, DAYS);
+  const financing = computeFinancing(stateWithConstruction, budget, DAYS);
 
   const reserves = clamp(
     stateWithConstruction.reserves +
@@ -66,32 +77,35 @@ export function processTurn(prev: GameState): GameState {
     CLAMP.debt,
   );
 
-  // 6. Инфляция — не трогается: те же входы (gdpIndex/inflationRateAnnual/
-  // unemploymentRate из stateWithConstruction, т.е. на начало хода),
-  // на своём прежнем месте в пайплайне, до регионального роста ниже.
+  // 6. Инфляция — не трогается по порядку: те же входы (gdpIndex/
+  // inflationRateAnnual/unemploymentRate из stateWithConstruction, т.е. на
+  // начало тика), до регионального роста ниже.
   const inflationRateAnnual = nextInflation(
     stateWithConstruction,
     financing,
     oilPriceDelta,
+    DAYS,
   );
 
-  // 7. Рост/безработица/коррупция — теперь снизу вверх: считаем каждый
-  // регион отдельно (та же логика, что раньше была нацформулой, но в
-  // масштабе региона), затем агрегируем в нацпоказатели.
+  // 7. Рост/безработица/коррупция — снизу вверх: каждый регион отдельно,
+  // затем агрегация в нацпоказатели (не тронуто этим этапом).
   const regionEconomies = advanceRegionEconomies(
     stateWithConstruction,
     oilPrice,
     construction.newlyCompletedInfrastructureByRegion,
+    DAYS,
   );
   const gdpIndex = aggregateGdpIndex(regionEconomies);
   const unemploymentRate = aggregateWeightedUnemployment(regionEconomies);
   const corruption = aggregateWeightedCorruption(regionEconomies);
+  // Аннуализация суточного изменения: было ×400 (4 квартала×100) для
+  // квартального шага, теперь ×(365/DAYS)×100 для суточного.
   const gdpGrowthRateAnnual =
-    (gdpIndex / stateWithConstruction.gdpIndex - 1) * 400;
+    (gdpIndex / stateWithConstruction.gdpIndex - 1) * (DAYS_PER_YEAR / DAYS) * 100;
 
   // 9. Недовольство — по-прежнему на stateWithConstruction (старые
   // unemploymentRate/corruption/inflationRateAnnual, до пересчёта выше).
-  const socialUnrest = nextUnrest(stateWithConstruction);
+  const socialUnrest = nextUnrest(stateWithConstruction, DAYS);
 
   // 11. Одобрение
   const approval = nextApproval(
@@ -99,9 +113,10 @@ export function processTurn(prev: GameState): GameState {
     gdpGrowthRateAnnual,
     stateWithConstruction.unemploymentRate,
     unemploymentRate,
+    DAYS,
   );
 
-  // Ставка по долгу на следующий ход
+  // Ставка по долгу на следующий тик — свежий срез, не зависит от DAYS.
   const effectiveInterestRate = nextInterestRate({
     ...stateWithConstruction,
     publicDebt,
@@ -109,16 +124,11 @@ export function processTurn(prev: GameState): GameState {
   });
 
   // 12. Политические очки
-  const pgGain = politicalPointsGain(stateWithConstruction);
-
-  const { year, quarter } = nextDate(prev.year, prev.quarter);
-  const turn = prev.turn + 1;
+  const pgGain = politicalPointsGain(stateWithConstruction, DAYS);
 
   let next: GameState = {
     ...prev,
-    turn,
-    year,
-    quarter,
+    gameTimeDays,
     gdpIndex,
     gdpGrowthRateAnnual,
     inflationRateAnnual,
@@ -134,28 +144,65 @@ export function processTurn(prev: GameState): GameState {
     politicalPoints: prev.politicalPoints + pgGain,
     industries: construction.industries,
     regionEconomies,
-    eventCooldowns: Object.fromEntries(
-      Object.entries(prev.eventCooldowns).map(([id, t]) => [id, Math.max(t - 1, 0)]),
-    ),
     log: [...prev.log, ...logEntries].slice(-200),
   };
 
-  next = tickModifiers(next);
+  // Граница условного 90-дневного квартала — здесь и только здесь
+  // срабатывают события/реформы/история/деривативы turn-year-quarter,
+  // той же частоты и с тем же смыслом, что и раньше (см. план п.3/5).
+  const prevQuarterIndex = Math.floor(prev.gameTimeDays / DAYS_PER_QUARTER);
+  const nextQuarterIndex = Math.floor(gameTimeDays / DAYS_PER_QUARTER);
+  if (nextQuarterIndex !== prevQuarterIndex) {
+    const turn = next.turn + 1;
+    const quarter = (((turn - 1) % 4) + 1) as Quarter;
+    const year = 2000 + Math.floor((turn - 1) / 4);
 
-  // 13. Случайное событие
-  const rolled = rollForEvent(next);
-  if (rolled) {
     next = {
       ...next,
-      activeEvent: rolled.def.build(next),
-      eventCooldowns: {
-        ...next.eventCooldowns,
-        [rolled.def.id]: rolled.def.cooldownTurns,
-      },
+      turn,
+      year,
+      quarter,
+      eventCooldowns: Object.fromEntries(
+        Object.entries(next.eventCooldowns).map(([id, t]) => [id, Math.max(t - 1, 0)]),
+      ),
     };
+    next = tickModifiers(next);
+
+    const rolled = rollForEvent(next);
+    if (rolled) {
+      next = {
+        ...next,
+        activeEvent: rolled.def.build(next),
+        eventCooldowns: {
+          ...next.eventCooldowns,
+          [rolled.def.id]: rolled.def.cooldownTurns,
+        },
+      };
+    }
+
+    const snapshot: TurnSnapshot = {
+      turn: next.turn,
+      year: next.year,
+      quarter: next.quarter,
+      gdpIndex: next.gdpIndex,
+      gdpGrowthRateAnnual: next.gdpGrowthRateAnnual,
+      inflationRateAnnual: next.inflationRateAnnual,
+      unemploymentRate: next.unemploymentRate,
+      approval: next.approval,
+      corruption: next.corruption,
+      socialUnrest: next.socialUnrest,
+      budgetBalance: next.budgetBalance,
+      reserves: next.reserves,
+      publicDebt: next.publicDebt,
+      oilPrice: next.oilPrice,
+      politicalPoints: next.politicalPoints,
+    };
+    next = { ...next, history: [...next.history, snapshot].slice(-400) };
   }
 
-  // Условие завершения игры (кризис легитимности власти)
+  // Условие завершения игры (кризис легитимности власти) — проверяется
+  // КАЖДЫЕ сутки, не только на границе квартала: более отзывчиво, чем
+  // раньше, ничего специально делать для этого не нужно.
   if (
     (next.socialUnrest >= GAME_OVER_UNREST_THRESHOLD &&
       next.approval <= GAME_OVER_APPROVAL_THRESHOLD) ||
@@ -169,26 +216,6 @@ export function processTurn(prev: GameState): GameState {
       },
     };
   }
-
-  // 14. Снимок хода
-  const snapshot: TurnSnapshot = {
-    turn: next.turn,
-    year: next.year,
-    quarter: next.quarter,
-    gdpIndex: next.gdpIndex,
-    gdpGrowthRateAnnual: next.gdpGrowthRateAnnual,
-    inflationRateAnnual: next.inflationRateAnnual,
-    unemploymentRate: next.unemploymentRate,
-    approval: next.approval,
-    corruption: next.corruption,
-    socialUnrest: next.socialUnrest,
-    budgetBalance: next.budgetBalance,
-    reserves: next.reserves,
-    publicDebt: next.publicDebt,
-    oilPrice: next.oilPrice,
-    politicalPoints: next.politicalPoints,
-  };
-  next = { ...next, history: [...next.history, snapshot].slice(-400) };
 
   return next;
 }

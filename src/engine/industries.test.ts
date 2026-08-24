@@ -3,7 +3,7 @@ import { TUNING, createInitialState, maxProductionSlots } from "./constants";
 import {
   advanceConstruction,
   canBuildInRegion,
-  effectiveBuildTurns,
+  effectiveBuildDays,
   hasFreeInfrastructureSlot,
   hasFreeProductionSlot,
   startBuildingIndustry,
@@ -78,9 +78,9 @@ describe("national industrial base speeds up construction everywhere", () => {
     const withoutIndustries = { ...withIndustries, industries: [] };
     const region = REGIONS_BY_ID.get("sverdlovsk")!;
 
-    const turnsWith = effectiveBuildTurns(withIndustries, "manufacturing", region.id);
-    const turnsWithout = effectiveBuildTurns(withoutIndustries, "manufacturing", region.id);
-    expect(turnsWith).toBeLessThanOrEqual(turnsWithout);
+    const daysWith = effectiveBuildDays(withIndustries, "manufacturing", region.id);
+    const daysWithout = effectiveBuildDays(withoutIndustries, "manufacturing", region.id);
+    expect(daysWith).toBeLessThanOrEqual(daysWithout);
   });
 });
 
@@ -107,24 +107,29 @@ describe("infrastructure is buildable and raises production slot capacity", () =
       (i) => i.regionId === region.id && i.sector === "infrastructure" && i.status === "building",
     )!;
 
-    // Продвигаем стройку до завершения.
+    // Абсолютная метка завершения — сравнение, не декремент (см. план
+    // "Непрерывный игровой календарь..."): продвигаем по одним суткам до
+    // ровно дня завершения, стройка не должна проскочить мимо него.
     let industries = state.industries;
-    for (let i = 0; i < built.turnsRemaining; i++) {
-      const result = advanceConstruction(industries);
-      industries = result.industries;
-      if (i === built.turnsRemaining - 1) {
-        const economies = advanceRegionEconomies(
-          { ...state, industries },
-          state.oilPrice,
-          result.newlyCompletedInfrastructureByRegion,
-        );
-        const levelAfter = economies[region.id].infrastructureLevel;
-        expect(levelAfter).toBeCloseTo(
-          Math.min(100, levelBefore + TUNING.infrastructureBuild.levelGainPerProject),
-          6,
-        );
-      }
+    const completionDay = Math.ceil(built.completesAtGameDay);
+    let lastResult = { industries, newlyCompletedInfrastructureByRegion: {} as Record<string, number>, logEntries: [] as string[] };
+    for (let day = state.gameTimeDays + 1; day <= completionDay; day++) {
+      lastResult = advanceConstruction(industries, day);
+      industries = lastResult.industries;
     }
+
+    expect(industries.find((i) => i.id === built.id)!.status).toBe("operational");
+    const economies = advanceRegionEconomies(
+      { ...state, industries },
+      state.oilPrice,
+      lastResult.newlyCompletedInfrastructureByRegion,
+      1,
+    );
+    const levelAfter = economies[region.id].infrastructureLevel;
+    expect(levelAfter).toBeCloseTo(
+      Math.min(100, levelBefore + TUNING.infrastructureBuild.levelGainPerProject),
+      6,
+    );
   });
 });
 

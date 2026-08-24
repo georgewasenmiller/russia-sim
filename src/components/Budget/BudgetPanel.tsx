@@ -1,6 +1,7 @@
 import { Landmark } from "lucide-react";
 import { INDUSTRY_DEFS } from "../../engine/constants";
 import { computeBudget } from "../../engine/formulas";
+import { DAYS_PER_QUARTER } from "../../engine/time";
 import { useGame } from "../../state/GameContext";
 import type { IndustrySector } from "../../engine/types";
 import { fmtUsdBn } from "../../utils/format";
@@ -44,7 +45,9 @@ function Row({
 
 export function BudgetPanel({ onClose }: { onClose: () => void }) {
   const { state } = useGame();
-  const budget = computeBudget(state, state.oilPrice);
+  // Показываем квартальный run-rate (как раньше) для читаемости — сама
+  // экономика внутри тикает суточно (см. src/engine/turnEngine.ts).
+  const budget = computeBudget(state, state.oilPrice, DAYS_PER_QUARTER);
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">

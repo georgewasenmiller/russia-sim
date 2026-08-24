@@ -16,20 +16,23 @@ import {
   nextUnrest,
   politicalPointsGain,
 } from "./formulas";
+import { applyReform } from "./reforms";
 import {
   advanceRegionEconomies,
   nextRegionCorruption,
   regionMacroMultiplier,
   targetRegionUnemployment,
 } from "./regionEconomy";
-import { processTurn } from "./turnEngine";
+import { advanceOneDay } from "./turnEngine";
 import { REGIONS } from "../regions/data";
+
+const DAY = 1;
 
 describe("formulas: boundary safety", () => {
   it("nextOilPrice stays within clamp bounds across many samples", () => {
     const state = createInitialState();
     for (let i = 0; i < 500; i++) {
-      const price = nextOilPrice({ ...state, oilPrice: state.oilPrice });
+      const price = nextOilPrice({ ...state, oilPrice: state.oilPrice }, DAY);
       expect(Number.isFinite(price)).toBe(true);
       expect(price).toBeGreaterThanOrEqual(5);
       expect(price).toBeLessThanOrEqual(220);
@@ -41,16 +44,16 @@ describe("formulas: boundary safety", () => {
     state.reserves = 0;
     state.sliders.taxBurden = 0;
     state.sliders.govSpendingShare = 100;
-    const budget = computeBudget(state, state.oilPrice);
+    const budget = computeBudget(state, state.oilPrice, DAY);
     expect(Number.isFinite(budget.balance)).toBe(true);
     expect(Number.isFinite(budget.balancePctGdp)).toBe(true);
   });
 
   it("computeFinancing handles a large deficit without going negative reserves logic", () => {
     const state = createInitialState();
-    const budget = computeBudget(state, state.oilPrice);
+    const budget = computeBudget(state, state.oilPrice, DAY);
     const forcedDeficitBudget = { ...budget, balance: -1000, balancePctGdp: -50 };
-    const financing = computeFinancing(state, forcedDeficitBudget);
+    const financing = computeFinancing(state, forcedDeficitBudget, DAY);
     expect(Number.isFinite(financing.monetizedAmount)).toBe(true);
     expect(Number.isFinite(financing.newDebtAmount)).toBe(true);
     expect(financing.newDebtAmount).toBeGreaterThanOrEqual(0);
@@ -58,9 +61,9 @@ describe("formulas: boundary safety", () => {
 
   it("nextInflation stays within clamp bounds", () => {
     const state = createInitialState();
-    const budget = computeBudget(state, state.oilPrice);
-    const financing = computeFinancing(state, budget);
-    const inflation = nextInflation(state, financing, 10);
+    const budget = computeBudget(state, state.oilPrice, DAY);
+    const financing = computeFinancing(state, budget, DAY);
+    const inflation = nextInflation(state, financing, 10, DAY);
     expect(inflation).toBeGreaterThanOrEqual(-10);
     expect(inflation).toBeLessThanOrEqual(200);
   });
@@ -71,7 +74,7 @@ describe("formulas: boundary safety", () => {
     state.unemploymentRate = 40;
     state.corruption = 100;
     state.approval = 0;
-    const unrest = nextUnrest(state);
+    const unrest = nextUnrest(state, DAY);
     expect(unrest).toBeGreaterThanOrEqual(0);
     expect(unrest).toBeLessThanOrEqual(100);
   });
@@ -89,8 +92,8 @@ describe("formulas: boundary safety", () => {
     const state = createInitialState();
     state.approval = 0;
     state.socialUnrest = 100;
-    const gain = politicalPointsGain(state);
-    expect(gain).toBeGreaterThanOrEqual(0.5);
+    const gain = politicalPointsGain(state, DAY);
+    expect(gain).toBeGreaterThan(0);
   });
 });
 
@@ -103,7 +106,7 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
     state.oilPrice = 200;
     for (const region of REGIONS) {
       const economy = state.regionEconomies[region.id];
-      const multiplier = regionMacroMultiplier(region, economy, state, state.oilPrice);
+      const multiplier = regionMacroMultiplier(region, economy, state, state.oilPrice, DAY);
       expect(multiplier).toBeGreaterThanOrEqual(TUNING.regionMacro.floor);
       expect(multiplier).toBeLessThanOrEqual(TUNING.regionMacro.ceiling);
 
@@ -111,7 +114,7 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
       expect(unemployment).toBeGreaterThanOrEqual(2);
       expect(unemployment).toBeLessThanOrEqual(40);
 
-      const corruption = nextRegionCorruption(region, economy, state, state.oilPrice);
+      const corruption = nextRegionCorruption(region, economy, state, state.oilPrice, DAY);
       expect(corruption).toBeGreaterThanOrEqual(0);
       expect(corruption).toBeLessThanOrEqual(100);
     }
@@ -131,24 +134,28 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
       state.regionEconomies[oilRegion.id],
       state,
       state.oilPriceMeanTarget,
+      DAY,
     );
     const oilMultiplierHigh = regionMacroMultiplier(
       oilRegion,
       state.regionEconomies[oilRegion.id],
       state,
       highOilPrice,
+      DAY,
     );
     const plainMultiplierAtTarget = regionMacroMultiplier(
       plainRegion,
       state.regionEconomies[plainRegion.id],
       state,
       state.oilPriceMeanTarget,
+      DAY,
     );
     const plainMultiplierHigh = regionMacroMultiplier(
       plainRegion,
       state.regionEconomies[plainRegion.id],
       state,
       highOilPrice,
+      DAY,
     );
 
     const oilDelta = Math.abs(oilMultiplierHigh - oilMultiplierAtTarget);
@@ -162,12 +169,12 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
     const before = state.regionEconomies[region.id].unemploymentRate;
 
     // Резкая потеря всех предприятий региона — цель безработицы подскакивает,
-    // но фактическое значение должно сдвинуться лишь частично за один ход.
+    // но фактическое значение должно сдвинуться лишь частично за один суточный тик.
     const stripped = {
       ...state,
       industries: state.industries.filter((i) => i.regionId !== region.id),
     };
-    const next = advanceRegionEconomies(stripped, stripped.oilPrice, {});
+    const next = advanceRegionEconomies(stripped, stripped.oilPrice, {}, DAY);
     const target = targetRegionUnemployment(region, []);
     const after = next[region.id].unemploymentRate;
 
@@ -224,28 +231,39 @@ describe("regionEconomy: boundary safety and specialization effects", () => {
   });
 });
 
-describe("turnEngine: processTurn integration", () => {
-  it("advances the date and turn counter by one quarter", () => {
+describe("turnEngine: advanceOneDay integration", () => {
+  it("advances gameTimeDays by exactly one day per call", () => {
     const state = createInitialState();
-    const next = processTurn(state);
-    expect(next.turn).toBe(2);
-    expect(next.quarter).toBe(2);
-    expect(next.year).toBe(2000);
+    const next = advanceOneDay(state);
+    expect(next.gameTimeDays).toBe(state.gameTimeDays + 1);
+  });
+
+  it("increments turn/quarter/year only once a full 90-day quarter has elapsed, not every day", () => {
+    let state = createInitialState();
+    for (let i = 0; i < 89; i++) {
+      state = advanceOneDay(state);
+    }
+    expect(state.turn).toBe(1); // ещё не пересекли границу квартала
+    state = advanceOneDay(state); // 90-й день — граница квартала пересечена
+    expect(state.turn).toBe(2);
+    expect(state.quarter).toBe(2);
+    expect(state.year).toBe(2000);
   });
 
   it("rolls over to the next year after Q4", () => {
     let state = createInitialState();
-    state = { ...state, quarter: 4 };
-    const next = processTurn(state);
-    expect(next.quarter).toBe(1);
-    expect(next.year).toBe(2001);
+    for (let i = 0; i < 90 * 4; i++) {
+      state = advanceOneDay(state);
+    }
+    expect(state.quarter).toBe(1);
+    expect(state.year).toBe(2001);
   });
 
   it("does not advance when the game is over", () => {
     const state = createInitialState();
     state.gameOver = { reason: "test" };
-    const next = processTurn(state);
-    expect(next.turn).toBe(state.turn);
+    const next = advanceOneDay(state);
+    expect(next.gameTimeDays).toBe(state.gameTimeDays);
   });
 
   it("does not advance while an event awaits a choice", () => {
@@ -256,13 +274,36 @@ describe("turnEngine: processTurn integration", () => {
       description: "d",
       choices: [],
     };
-    const next = processTurn(state);
-    expect(next.turn).toBe(state.turn);
+    const next = advanceOneDay(state);
+    expect(next.gameTimeDays).toBe(state.gameTimeDays);
   });
 
-  it("survives 200 consecutive turns without producing NaN state", () => {
+  it("reforms/history tick only at quarter boundaries (every 90 days), not every day", () => {
     let state = createInitialState();
-    for (let i = 0; i < 200; i++) {
+    state = { ...state, politicalPoints: 20 };
+    state = applyReform(state, "anti_corruption_agency"); // duration: 12 ходов
+    const initialTurnsRemaining = state.activeReforms[0]!.turnsRemaining;
+
+    function stepSkippingEvents(s: typeof state, days: number) {
+      for (let i = 0; i < days; i++) {
+        if (s.activeEvent) s = { ...s, activeEvent: null };
+        s = advanceOneDay(s);
+      }
+      return s;
+    }
+
+    state = stepSkippingEvents(state, 45); // меньше 90 дней — квартал не пересечён
+    expect(state.activeReforms[0]!.turnsRemaining).toBe(initialTurnsRemaining);
+    expect(state.history.length).toBe(0);
+
+    state = stepSkippingEvents(state, 45); // итого 90 — граница пересечена ровно один раз
+    expect(state.activeReforms[0]!.turnsRemaining).toBe(initialTurnsRemaining! - 1);
+    expect(state.history.length).toBe(1);
+  });
+
+  it("survives 2000 consecutive days without producing NaN state", () => {
+    let state = createInitialState();
+    for (let i = 0; i < 2000; i++) {
       if (state.activeEvent) {
         const choice = state.activeEvent.choices[0];
         state = choice.requires && !choice.requires(state)
@@ -272,7 +313,7 @@ describe("turnEngine: processTurn integration", () => {
         continue;
       }
       if (state.gameOver) break;
-      state = processTurn(state);
+      state = advanceOneDay(state);
     }
     expect(Number.isFinite(state.gdpIndex)).toBe(true);
     expect(Number.isFinite(state.reserves)).toBe(true);

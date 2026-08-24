@@ -4,6 +4,7 @@ import {
   computeJobsAndOutput,
   maxProductionSlots,
 } from "./constants";
+import { DAYS_PER_QUARTER } from "./time";
 import type { GameState, Industry, IndustrySector } from "./types";
 import { REGIONS_BY_ID } from "../regions/data";
 
@@ -65,16 +66,37 @@ export function effectiveBuildCost(
   return def.buildCost * infrastructureMultipliers(infra).cost;
 }
 
-export function effectiveBuildTurns(
+/**
+ * Локальный (инфраструктура региона) и общестрановой (промбаза)
+ * множители скорости стройки — вычисляются вместе, чтобы зафиксировать
+ * ОБА на старте стройки (см. startBuildingIndustry) для тултипа "что
+ * влияло на скорость этой стройки", не только итоговый срок.
+ */
+function buildSpeedMultipliers(
+  state: GameState,
+  regionId: string,
+): { local: number; national: number } {
+  const infra = state.regionEconomies[regionId]?.infrastructureLevel ?? 50;
+  return {
+    local: infrastructureMultipliers(infra).turns,
+    national: nationalIndustrialMultiplier(state),
+  };
+}
+
+/**
+ * Срок стройки в игровых сутках (дробный — под непрерывный календарь,
+ * без округления до целого хода). buildTurns конвертируется в сутки через
+ * DAYS_PER_QUARTER, затем домножается на локальный и общестрановой
+ * множители скорости.
+ */
+export function effectiveBuildDays(
   state: GameState,
   sector: IndustrySector,
   regionId: string,
 ): number {
   const def = INDUSTRY_DEFS[sector];
-  const infra = state.regionEconomies[regionId]?.infrastructureLevel ?? 50;
-  const local = infrastructureMultipliers(infra).turns;
-  const national = nationalIndustrialMultiplier(state);
-  return Math.max(1, Math.round(def.buildTurns * local * national));
+  const { local, national } = buildSpeedMultipliers(state, regionId);
+  return def.buildTurns * DAYS_PER_QUARTER * local * national;
 }
 
 export function canAffordIndustry(
@@ -138,7 +160,8 @@ export function startBuildingIndustry(
   if (!canBuildInRegion(state, sector, regionId)) return state;
 
   const buildCost = effectiveBuildCost(state, sector, regionId);
-  const buildTurns = effectiveBuildTurns(state, sector, regionId);
+  const { local, national } = buildSpeedMultipliers(state, regionId);
+  const buildDays = def.buildTurns * DAYS_PER_QUARTER * local * national;
   const { jobs, outputContribution } = computeJobsAndOutput(sector, region, economy);
 
   industryCounter += 1;
@@ -148,7 +171,10 @@ export function startBuildingIndustry(
     sector: def.sector,
     label: def.label,
     status: "building",
-    turnsRemaining: buildTurns,
+    startedAtGameDay: state.gameTimeDays,
+    completesAtGameDay: state.gameTimeDays + buildDays,
+    localInfraMultiplier: local,
+    nationalMultiplier: national,
     jobs,
     outputContribution,
     maintenanceCost: def.maintenanceCost,
@@ -173,25 +199,31 @@ export interface ConstructionResult {
   logEntries: string[];
 }
 
-/** Продвигает стройки на один ход; вводит в строй завершённые. */
+/**
+ * Продвигает стройки на `currentGameDay` (абсолютная метка, не декремент —
+ * см. план "Непрерывный игровой календарь..."): завершение проверяется
+ * сравнением `currentGameDay >= completesAtGameDay`, что не может
+ * "проскочить" мимо независимо от размера шага. Вызывается на каждые
+ * игровые сутки.
+ */
 export function advanceConstruction(
   industries: Industry[],
+  currentGameDay: number,
 ): ConstructionResult {
   const newlyCompletedInfrastructureByRegion: Record<string, number> = {};
   const logEntries: string[] = [];
 
   const next = industries.map((industry) => {
     if (industry.status === "operational") return industry;
-    const turnsRemaining = industry.turnsRemaining - 1;
-    if (turnsRemaining <= 0) {
+    if (currentGameDay >= industry.completesAtGameDay) {
       if (industry.sector === "infrastructure") {
         newlyCompletedInfrastructureByRegion[industry.regionId] =
           (newlyCompletedInfrastructureByRegion[industry.regionId] ?? 0) + 1;
       }
       logEntries.push(`Завершено строительство: ${industry.label}.`);
-      return { ...industry, status: "operational" as const, turnsRemaining: 0 };
+      return { ...industry, status: "operational" as const };
     }
-    return { ...industry, turnsRemaining };
+    return industry;
   });
 
   return { industries: next, newlyCompletedInfrastructureByRegion, logEntries };
@@ -211,24 +243,25 @@ export function totalOperationalJobs(industries: Industry[]): number {
 
 export interface IndustryGrouping {
   operational: Partial<Record<IndustrySector, number>>;
-  building: { sector: IndustrySector; turnsRemaining: number }[];
+  building: { sector: IndustrySector; completesAtGameDay: number }[];
 }
 
 /**
  * Группирует предприятия (уже отфильтрованные под один регион) по
  * секторам — для отображения на карте (режим "Застройка"): счётчик по
  * секторам вместо одной иконки на завод, отдельно список строящихся с
- * оставшимся временем.
+ * абсолютной меткой завершения (потребитель сам считает оставшиеся
+ * дни/часы от текущего state.gameTimeDays).
  */
 export function groupIndustriesBySector(industries: Industry[]): IndustryGrouping {
   const operational: Partial<Record<IndustrySector, number>> = {};
-  const building: { sector: IndustrySector; turnsRemaining: number }[] = [];
+  const building: { sector: IndustrySector; completesAtGameDay: number }[] = [];
 
   for (const industry of industries) {
     if (industry.status === "operational") {
       operational[industry.sector] = (operational[industry.sector] ?? 0) + 1;
     } else {
-      building.push({ sector: industry.sector, turnsRemaining: industry.turnsRemaining });
+      building.push({ sector: industry.sector, completesAtGameDay: industry.completesAtGameDay });
     }
   }
 

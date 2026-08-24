@@ -1,6 +1,6 @@
 import { ShieldAlert } from "lucide-react";
+import { fmtGameDate, gameDateFromDays } from "../engine/time";
 import { useGame } from "../state/GameContext";
-import { fmtQuarterDate } from "../utils/format";
 
 export function GameOverScreen() {
   const { state, dispatch } = useGame();
@@ -15,8 +15,7 @@ export function GameOverScreen() {
         </h1>
         <p className="mt-2 max-w-lg text-slate-400">{state.gameOver.reason}</p>
         <p className="mt-2 text-sm text-slate-500">
-          Продержались до {fmtQuarterDate(state.year, state.quarter)}, ход{" "}
-          {state.turn}.
+          Продержались до {fmtGameDate(gameDateFromDays(state.gameTimeDays))}.
         </p>
       </div>
       <button

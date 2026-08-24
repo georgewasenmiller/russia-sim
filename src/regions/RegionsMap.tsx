@@ -23,6 +23,7 @@ import { SECTOR_ICON } from "./sectorIcons";
 import { groupIndustriesBySector } from "../engine/industries";
 import type { Industry, IndustrySector } from "../engine/types";
 import { useGame } from "../state/GameContext";
+import { fmtRemainingDuration } from "../utils/format";
 
 export type MapMode = "economy" | "infrastructure";
 
@@ -162,17 +163,21 @@ export function RegionsMap({
     return map;
   }, [state.industries]);
 
-  // Регионы, где стройка завершается СЛЕДУЮЩИЙ ход — переходящий сигнал,
-  // не завязан на mapMode (виден в обоих режимах).
+  // Регионы, где стройка завершается в ближайшие несколько суток —
+  // переходящий сигнал, не завязан на mapMode (виден в обоих режимах).
+  const COMPLETING_SOON_DAYS = 3;
   const completingSoon = useMemo(() => {
     const set = new Set<string>();
     for (const industry of state.industries) {
-      if (industry.status === "building" && industry.turnsRemaining === 1) {
+      if (
+        industry.status === "building" &&
+        industry.completesAtGameDay - state.gameTimeDays <= COMPLETING_SOON_DAYS
+      ) {
         set.add(industry.regionId);
       }
     }
     return set;
-  }, [state.industries]);
+  }, [state.industries, state.gameTimeDays]);
 
   function fillFor(regionId: string): string {
     if (mapMode === "infrastructure") {
@@ -412,7 +417,7 @@ export function RegionsMap({
               </div>
               {tooltipGrouping.building.map((b, i) => (
                 <div key={i} className="text-amber-400">
-                  {SECTOR_LABEL[b.sector]} — ещё {b.turnsRemaining} ход(а/ов)
+                  {SECTOR_LABEL[b.sector]} — {fmtRemainingDuration(b.completesAtGameDay - state.gameTimeDays)}
                 </div>
               ))}
             </div>

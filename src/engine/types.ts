@@ -34,7 +34,19 @@ export interface Industry {
   sector: IndustrySector;
   label: string;
   status: "building" | "operational";
-  turnsRemaining: number;
+  /** Игровые сутки от начала партии, на которых стартовала стройка. */
+  startedAtGameDay: number;
+  /**
+   * Игровые сутки от начала партии, на которых стройка завершится —
+   * зафиксировано один раз при старте (не пересчитывается, даже если
+   * позже изменятся инфраструктура региона/промбаза страны). Для legacy-
+   * предприятий (уже готовых на старте партии) равно startedAtGameDay.
+   */
+  completesAtGameDay: number;
+  /** Локальный множитель инфраструктуры региона, зафиксированный на старте — для тултипа. */
+  localInfraMultiplier: number;
+  /** Общестрановой множитель промбазы, зафиксированный на старте — для тултипа. */
+  nationalMultiplier: number;
   /** тыс. рабочих мест — вычислено по региону в момент начала стройки. */
   jobs: number;
   /** вклад в индекс ВВП за ход — вычислен по региону в момент начала стройки. */
@@ -152,6 +164,16 @@ export interface Sliders {
 
 export interface GameState {
   saveVersion: number;
+  /**
+   * Непрерывный игровой календарь — первичные часы игры (см.
+   * src/engine/time.ts). turn/year/quarter ниже — ДЕРИВАТИВ от этого поля,
+   * инкрементируются только при пересечении границы условного 90-дневного
+   * квартала (см. advanceOneDay в turnEngine.ts), сохранены ради реформ/
+   * событий/истории, которые по-прежнему меряют время в "ходах"/кварталах.
+   */
+  gameTimeDays: number;
+  gameSpeedLevel: 1 | 2 | 3 | 4 | 5;
+  isPaused: boolean;
   turn: number;
   year: number;
   quarter: Quarter;

@@ -7,6 +7,7 @@ import {
 } from "./formulas";
 import { totalOperationalJobs, totalOperationalOutput } from "./industries";
 import { computeMigrationDeltas, tradeGrowthBonus } from "./regionLinks";
+import { convergenceRate, flowScale, noiseScale } from "./time";
 import type { GameState, Industry } from "./types";
 import { REGIONS } from "../regions/data";
 import type { Region, RegionEconomy } from "../regions/types";
@@ -30,13 +31,16 @@ function isAgriculture(region: Region): boolean {
  * торговля с соседями/цена нефти для oil-gas региона/общий тренд
  * производительности — вверх. Жёстко клампится (TUNING.regionMacro.floor/
  * ceiling), чтобы даже одновременный удар всех штрафов не мог обнулить или
- * обратить в отрицательное ВВП региона за один ход.
+ * обратить в отрицательное ВВП региона за один ход. Свежий срез — не
+ * зависит от размера тика (`days`) вообще, кроме шума (см. noiseScale):
+ * при любом days для тех же входов даёт тот же результат.
  */
 export function regionMacroMultiplier(
   region: Region,
   economy: RegionEconomy,
   state: GameState,
   oilPrice: number,
+  days: number,
 ): number {
   // potentialGrowth()/tradeGrowthBonus()/сумма реформенных модификаторов
   // gdpGrowthRateAnnual откалиброваны для старой модели (доли годового
@@ -67,7 +71,7 @@ export function regionMacroMultiplier(
   // Торговля излишками сырья: соседи считаются по снимку на начало хода
   // (state.regionEconomies ещё не тронут этим ходом), так что бонус не
   // зависит от порядка обработки регионов в advanceRegionEconomies.
-  const tradeBonus = tradeGrowthBonus(region, state.regionEconomies) / divisor;
+  const tradeBonus = tradeGrowthBonus(region, state.regionEconomies, days) / divisor;
 
   const reformModifier =
     (sumModifier(state, "gdpGrowthRateAnnual") / divisor) *
@@ -88,7 +92,7 @@ export function regionMacroMultiplier(
     oilSensitivity +
     tradeBonus +
     reformModifier +
-    gaussianNoise(noiseStdDev);
+    gaussianNoise(noiseScale(noiseStdDev, days));
 
   return clamp(raw, [TUNING.regionMacro.floor, TUNING.regionMacro.ceiling]);
 }
@@ -112,44 +116,52 @@ export function targetRegionUnemployment(
  * Коррупция региона: дрейфует к собственному сид-значению региона (не к
  * общему нацбазису), плюс тот же национальный реформенный модификатор, что
  * и раньше действовал только на state.corruption — так антикоррупционная
- * реформа задевает все регионы разом. Не входит в объём этого этапа — не
- * зависит ни от построек, ни от роста/безработицы, не меняется.
+ * реформа задевает все регионы разом. Не входит в объём этого этапа по
+ * причинности (не зависит ни от построек, ни от роста/безработицы) — но
+ * тикает на `days` суток, как и всё остальное: oilRentDrift/reformModifier
+ * — поточные добавки (линейно), decay — алгебраически форма "закрытие
+ * разрыва" (`current + rate*(seed-current)`), несмотря на запись через
+ * `+`, поэтому rate переводится точной экспоненциальной формулой, не
+ * линейно; noise — по правилу корня.
  */
 export function nextRegionCorruption(
   region: Region,
   economy: RegionEconomy,
   state: GameState,
   oilPrice: number,
+  days: number,
 ): number {
   const driftMultiplier = isOilOrGas(region)
     ? TUNING.regionCorruption.oilRentDriftMultiplier
     : TUNING.regionCorruption.ambientDriftMultiplier;
-  const oilRentDrift =
-    TUNING.corruption.oilRentDriftCoefficient *
-    driftMultiplier *
-    Math.max(oilPrice - 40, 0);
+  const oilRentDrift = flowScale(
+    TUNING.corruption.oilRentDriftCoefficient * driftMultiplier * Math.max(oilPrice - 40, 0),
+    days,
+  );
 
   const decay =
-    TUNING.corruption.decayRate * (region.corruptionIndex - economy.corruptionIndex);
+    convergenceRate(TUNING.corruption.decayRate, days) *
+    (region.corruptionIndex - economy.corruptionIndex);
 
-  const reformModifier = sumModifier(state, "corruption");
-  const noise = gaussianNoise(TUNING.regionCorruption.noiseStdDev);
+  const reformModifier = flowScale(sumModifier(state, "corruption"), days);
+  const noise = gaussianNoise(noiseScale(TUNING.regionCorruption.noiseStdDev, days));
 
   const next = economy.corruptionIndex + oilRentDrift + decay + reformModifier + noise;
   return clamp(next, CLAMP.percent);
 }
 
-/** Продвигает экономику всех регионов на один ход. */
+/** Продвигает экономику всех регионов на `days` игровых суток. */
 export function advanceRegionEconomies(
   state: GameState,
   oilPrice: number,
   newlyCompletedInfrastructureByRegion: Record<string, number>,
+  days: number,
 ): Record<string, RegionEconomy> {
   const next: Record<string, RegionEconomy> = {};
 
-  // Миграция считается один раз от снимка на начало хода — та же логика,
+  // Миграция считается один раз от снимка на начало тика — та же логика,
   // что и торговый бонус: не зависит от порядка обработки регионов ниже.
-  const migrationDeltas = computeMigrationDeltas(state.regionEconomies);
+  const migrationDeltas = computeMigrationDeltas(state.regionEconomies, days);
 
   for (const region of REGIONS) {
     const economy = state.regionEconomies[region.id];
@@ -171,7 +183,7 @@ export function advanceRegionEconomies(
     // regionMacroMultiplier) и небольшая нефтегазовая рента для регионов с
     // соответствующей специализацией.
     const buildingsOutput = totalOperationalOutput(regionIndustries);
-    const macroMultiplier = regionMacroMultiplier(region, economy, state, oilPrice);
+    const macroMultiplier = regionMacroMultiplier(region, economy, state, oilPrice, days);
     const oilGasRent = isOilOrGas(region)
       ? TUNING.oilGasRent.coefficient *
         Math.max(oilPrice - TUNING.oilGasRent.referencePrice, 0)
@@ -179,18 +191,21 @@ export function advanceRegionEconomies(
     const gdpIndex = buildingsOutput * macroMultiplier + oilGasRent;
 
     // Безработица — целевое значение считается строго по дефициту рабочих
-    // мест; фактическое движется к цели за 2-3 хода (не телепортируется в
-    // тот же ход, что здание достроилось), плюс независимая миграционная
-    // дельта поверх — тот же принцип "постепенно", что и в regionLinks.ts.
+    // мест; фактическое движется к цели за несколько дней (не
+    // телепортируется в тот же тик, что здание достроилось), плюс
+    // независимая миграционная дельта поверх — тот же принцип
+    // "постепенно", что и в regionLinks.ts. adjustmentSpeed — форма
+    // "закрытие разрыва", точная экспоненциальная конверсия.
     const target = targetRegionUnemployment(region, regionIndustries);
     const unemploymentRate = clamp(
       economy.unemploymentRate +
-        TUNING.regionUnemployment.adjustmentSpeed * (target - economy.unemploymentRate) +
+        convergenceRate(TUNING.regionUnemployment.adjustmentSpeed, days) *
+          (target - economy.unemploymentRate) +
         migrationDeltas[region.id],
       CLAMP.unemployment,
     );
 
-    const corruptionIndex = nextRegionCorruption(region, economy, state, oilPrice);
+    const corruptionIndex = nextRegionCorruption(region, economy, state, oilPrice, days);
 
     next[region.id] = { gdpIndex, unemploymentRate, corruptionIndex, infrastructureLevel };
   }
