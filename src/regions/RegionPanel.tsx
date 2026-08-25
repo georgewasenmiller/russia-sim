@@ -70,10 +70,6 @@ export function RegionPanel({
 
   const economy = state.regionEconomies[region.id];
 
-  const neighborNames = region.neighbors
-    .map((id) => REGIONS.find((r) => r.id === id)?.name)
-    .filter((name): name is string => Boolean(name));
-
   const regionIndustries = state.industries.filter(
     (ind) => ind.regionId === region.id,
   );
@@ -163,28 +159,6 @@ export function RegionPanel({
           нефтегазовых регионов). Отдельной "базовой экономики" не
           существует.
         </p>
-      </div>
-
-      <div>
-        <h4 className="mb-1 text-xs uppercase tracking-wide text-slate-500">
-          Соседние регионы
-        </h4>
-        {neighborNames.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {neighborNames.map((name) => (
-              <li
-                key={name}
-                className="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300"
-              >
-                {name}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-slate-600">
-            Нет соседей в текущем наборе регионов.
-          </p>
-        )}
       </div>
 
       <div>

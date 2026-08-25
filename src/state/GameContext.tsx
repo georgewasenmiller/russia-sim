@@ -12,7 +12,7 @@ import { createInitialState } from "../engine/constants";
 import { advanceOneDay } from "../engine/turnEngine";
 import { resolveEventChoice } from "../engine/events";
 import { startBuildingIndustry } from "../engine/industries";
-import { changeTaxBurden, type TaxDirection } from "../engine/policy";
+import { changeTaxBurden, repayDebt, type TaxDirection } from "../engine/policy";
 import { loadGame, saveGame } from "../engine/save";
 import type { GameSpeedLevel } from "../engine/time";
 import type { GameState, Sliders } from "../engine/types";
@@ -25,6 +25,7 @@ type Action =
   | { type: "SET_PAUSED"; paused: boolean }
   | { type: "SET_SLIDER"; slider: keyof Sliders; value: number }
   | { type: "CHANGE_TAX_BURDEN"; direction: TaxDirection }
+  | { type: "REPAY_DEBT"; amountBn: number }
   | { type: "BUILD_INDUSTRY"; sector: IndustrySector; regionId: string }
   | { type: "RESOLVE_EVENT_CHOICE"; choiceId: string }
   | { type: "NEW_GAME" }
@@ -51,6 +52,8 @@ function reducer(state: GameState, action: Action): GameState {
       };
     case "CHANGE_TAX_BURDEN":
       return changeTaxBurden(state, action.direction);
+    case "REPAY_DEBT":
+      return repayDebt(state, action.amountBn);
     case "BUILD_INDUSTRY":
       return startBuildingIndustry(state, action.sector, action.regionId);
     case "RESOLVE_EVENT_CHOICE":

@@ -50,3 +50,22 @@ body {
 .region-pulse {
   animation: region-pulse 1.6s ease-in-out infinite;
 }
+
+/*
+ * Однократная вспышка карточки после успешного действия игрока (например
+ * погашения госдолга кликом в TopBar) — в отличие от region-pulse, не
+ * infinite: должна отыграть один раз и остановиться, чтобы клик ощущался
+ * как что-то произошедшее, но не превращался в постоянную анимацию.
+ */
+@keyframes debt-repay-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(52, 211, 153, 0);
+  }
+}
+
+.debt-repay-flash {
+  animation: debt-repay-flash 500ms ease-out;
+}

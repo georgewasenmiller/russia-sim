@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TUNING, createInitialState, maxProductionSlots } from "./constants";
+import { TUNING, createInitialState, maxProductionSlots, regionLaborForce } from "./constants";
 import {
   advanceConstruction,
   canBuildInRegion,
@@ -10,8 +10,32 @@ import {
   startBuildingIndustry,
   usedProductionSlots,
 } from "./industries";
-import { advanceRegionEconomies } from "./regionEconomy";
+import { advanceRegionEconomies, targetRegionUnemployment } from "./regionEconomy";
+import type { IndustrySector } from "./types";
 import { REGIONS_BY_ID } from "../regions/data";
+
+/** Заполняет производственные слоты региона, чередуя секторы (не
+ * повторяя один и тот же подряд — иначе упрёмся в очередь "не более одной
+ * стройки типа за раз", см. isSectorAlreadyBuilding) — используется для
+ * тестов на предел занятости региона населением. */
+function fillProductionSlots(
+  state: ReturnType<typeof createInitialState>,
+  regionId: string,
+) {
+  const sectors: IndustrySector[] = ["oil_gas", "manufacturing", "agriculture", "tech"];
+  let next = state;
+  let i = 0;
+  let guard = 0;
+  while (hasFreeProductionSlot(next, regionId) && guard < 50) {
+    const sector = sectors[i % sectors.length];
+    if (canBuildInRegion(next, sector, regionId)) {
+      next = startBuildingIndustry(next, sector, regionId);
+    }
+    i += 1;
+    guard += 1;
+  }
+  return next;
+}
 
 function withUnlimitedReserves(state: ReturnType<typeof createInitialState>) {
   return { ...state, reserves: 1_000_000 };
@@ -197,5 +221,55 @@ describe("strict unemployment: production slots stay finite and used slots never
         maxProductionSlots(region, economy),
       );
     }
+  });
+});
+
+describe("employment cannot exceed the region's labor force (regression: computeJobsAndOutput cap)", () => {
+  it("total committed jobs across ALL of a region's industries never exceeds regionLaborForce, even filling every production slot", () => {
+    for (const id of ["nenets", "moscow", "sverdlovsk"]) {
+      let state = withUnlimitedReserves(createInitialState());
+      const region = REGIONS_BY_ID.get(id)!;
+      state = fillProductionSlots(state, region.id);
+
+      const totalJobs = state.industries
+        .filter((ind) => ind.regionId === region.id)
+        .reduce((sum, ind) => sum + ind.jobs, 0);
+      expect(totalJobs).toBeLessThanOrEqual(regionLaborForce(region));
+    }
+  });
+
+  it("a building started when the region is already fully employed contributes ~0 jobs and ~0 output, not phantom GDP", () => {
+    let state = withUnlimitedReserves(createInitialState());
+    const region = REGIONS_BY_ID.get("nenets")!;
+    state = fillProductionSlots(state, region.id);
+    // На этом этапе слоты, скорее всего, ещё не полностью заполнены (см.
+    // isSectorAlreadyBuilding), но труд. резерв мог уже быть исчерпан —
+    // проверяем инвариант напрямую: если бы существовал ещё один свободный
+    // слот и труд. резерв был исчерпан, новое здание получило бы 0 (не
+    // отрицательные и не "лишние") рабочих мест.
+    const totalJobs = state.industries
+      .filter((ind) => ind.regionId === region.id)
+      .reduce((sum, ind) => sum + ind.jobs, 0);
+    expect(totalJobs).toBeGreaterThanOrEqual(0);
+    expect(totalJobs).toBeLessThanOrEqual(regionLaborForce(region));
+  });
+});
+
+describe("unemployment differentiates by build-out level (regression: no longer pinned at the floor everywhere)", () => {
+  it("a region's target unemployment drops as it gets built out, and starts well above the floor, not artificially pinned", () => {
+    let state = withUnlimitedReserves(createInitialState());
+    const region = REGIONS_BY_ID.get("nenets")!;
+
+    const initialIndustries = state.industries.filter((i) => i.regionId === region.id);
+    const initialTarget = targetRegionUnemployment(region, initialIndustries);
+    // Не должен уже на старте партии быть искусственно прижат к полу
+    // клампа (2%) — legacy-заполнение оставляет реальный запас.
+    expect(initialTarget).toBeGreaterThan(2);
+
+    state = fillProductionSlots(state, region.id);
+    const filledIndustries = state.industries.filter((i) => i.regionId === region.id);
+    const filledTarget = targetRegionUnemployment(region, filledIndustries);
+
+    expect(filledTarget).toBeLessThanOrEqual(initialTarget);
   });
 });

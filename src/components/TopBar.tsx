@@ -9,9 +9,12 @@ import {
   ScrollText,
   Sliders,
 } from "lucide-react";
+import { useState } from "react";
 import { nationalDebtUsd } from "../engine/economyMetrics";
 import { computeBudget } from "../engine/formulas";
+import { canRepayDebt } from "../engine/policy";
 import { GAME_SPEEDS, fmtGameDate, gameDateFromDays } from "../engine/time";
+import type { GameState } from "../engine/types";
 import { useGame } from "../state/GameContext";
 import { HoverTip } from "./ui/HoverTip";
 import {
@@ -66,7 +69,7 @@ export function TopBar({
           value={fmtUsdMnPerDay(dailyBudget.balance)}
           tone={dailyBudget.balance >= 0 ? "good" : "bad"}
         />
-        <DebtStat usdValue={debtUsd} pctOfGdp={state.publicDebt} />
+        <DebtStat usdValue={debtUsd} pctOfGdp={state.publicDebt} state={state} dispatch={dispatch} />
         <Stat
           icon={<Droplet size={16} className="text-orange-400" />}
           label="Нефть"
@@ -147,19 +150,56 @@ export function TopBar({
  * Карточка госдолга: сумма в $ (как и раньше показывалась бы), но цвет
  * текста/обводки считается по отношению долг/ВВП% (state.publicDebt),
  * не по самой сумме — 4 тира вместо стандартного 2-тонового Stat. Точный
- * процент виден только при наведении, в тултипе снизу.
+ * процент виден только при наведении, в тултипе снизу — там же подсказка
+ * про погашение ПКМ/Ctrl+ПКМ/Shift+ПКМ, иначе игрок физически не узнает
+ * о механике. Правый клик списывает $1/10/100 млрд из резервов и на ту же
+ * (или меньшую, если долг уже почти погашен — см. policy.ts:repayDebt)
+ * сумму снижает госдолг; успешное погашение даёт короткую вспышку карточки.
  */
-function DebtStat({ usdValue, pctOfGdp }: { usdValue: number; pctOfGdp: number }) {
+function DebtStat({
+  usdValue,
+  pctOfGdp,
+  state,
+  dispatch,
+}: {
+  usdValue: number;
+  pctOfGdp: number;
+  state: GameState;
+  dispatch: (action: { type: "REPAY_DEBT"; amountBn: number }) => void;
+}) {
   const colorClass = debtRatioColorClass(pctOfGdp);
   const critical = isDebtRatioCritical(pctOfGdp);
+  const [flash, setFlash] = useState(false);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // e.metaKey — Cmd на Mac, где обычная модификатор-комбинация не Ctrl.
+    const amountBn = e.shiftKey ? 100 : e.ctrlKey || e.metaKey ? 10 : 1;
+    if (canRepayDebt(state, amountBn)) {
+      dispatch({ type: "REPAY_DEBT", amountBn });
+      setFlash(true);
+      setTimeout(() => setFlash(false), 500);
+    }
+  };
+
   return (
-    <HoverTip label={`Госдолг: ${pctOfGdp.toFixed(0)}% ВВП`}>
+    <HoverTip
+      label={
+        <div className="flex flex-col gap-0.5">
+          <span>Госдолг: {pctOfGdp.toFixed(0)}% ВВП</span>
+          <span className="text-slate-400">
+            ПКМ: -$1 млрд · Ctrl+ПКМ: -$10 млрд · Shift+ПКМ: -$100 млрд
+          </span>
+        </div>
+      }
+    >
       <div
-        className={`flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
+        onContextMenu={handleContextMenu}
+        className={`flex cursor-context-menu items-center gap-2 rounded-md px-3 py-1.5 transition ${
           critical
             ? "bg-slate-900 ring-2 ring-rose-500/60 shadow-[0_0_14px_rgba(244,63,94,0.35)]"
             : "bg-slate-900"
-        }`}
+        } ${flash ? "debt-repay-flash" : ""}`}
       >
         <CreditCard size={16} className="text-fuchsia-400" />
         <div className="flex flex-col leading-tight">

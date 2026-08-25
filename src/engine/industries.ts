@@ -182,7 +182,10 @@ export function startBuildingIndustry(
   const buildCost = effectiveBuildCost(state, sector, regionId);
   const { local, national } = buildSpeedMultipliers(state, regionId);
   const buildDays = def.buildTurns * DAYS_PER_QUARTER * local * national;
-  const { jobs, outputContribution } = computeJobsAndOutput(sector, region, economy);
+  const alreadyCommittedJobs = state.industries
+    .filter((i) => i.regionId === regionId)
+    .reduce((sum, i) => sum + i.jobs, 0);
+  const { jobs, outputContribution } = computeJobsAndOutput(sector, region, economy, alreadyCommittedJobs);
 
   industryCounter += 1;
   const industry: Industry = {

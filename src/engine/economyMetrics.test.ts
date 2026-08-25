@@ -15,7 +15,7 @@ import {
   effectiveBuildDays,
   startBuildingIndustry,
 } from "./industries";
-import { canChangeTaxBurden, changeTaxBurden } from "./policy";
+import { canChangeTaxBurden, canRepayDebt, changeTaxBurden, repayDebt } from "./policy";
 import { DAYS_PER_QUARTER } from "./time";
 import { advanceOneDay } from "./turnEngine";
 import { REGIONS, REGIONS_BY_ID } from "../regions/data";
@@ -171,6 +171,48 @@ describe("policy: changeTaxBurden costs political points", () => {
     const state = createInitialState();
     expect(typeof state.sliders.govSpendingShare).toBe("number");
     expect(typeof state.sliders.deficitMonetizationShare).toBe("number");
+  });
+});
+
+describe("policy: repayDebt pays down the national debt from reserves (TopBar debt card)", () => {
+  it("deducts reserves and reduces publicDebt by the equivalent %GDP when affordable", () => {
+    let state = createInitialState();
+    state = { ...state, reserves: 50, publicDebt: 90 };
+    const gdpAnnual = nationalGdpUsdAnnual(state);
+    expect(canRepayDebt(state, 1)).toBe(true);
+
+    const next = repayDebt(state, 1);
+    expect(next.reserves).toBeCloseTo(49, 6);
+    expect(next.publicDebt).toBeCloseTo(90 - (1 / gdpAnnual) * 100, 6);
+  });
+
+  it("refuses (no-op) when reserves are insufficient", () => {
+    let state = createInitialState();
+    state = { ...state, reserves: 0.5, publicDebt: 90 };
+    expect(canRepayDebt(state, 1)).toBe(false);
+    const next = repayDebt(state, 1);
+    expect(next.reserves).toBe(0.5);
+    expect(next.publicDebt).toBe(90);
+  });
+
+  it("refuses (no-op) when debt is already 0, even with ample reserves", () => {
+    let state = createInitialState();
+    state = { ...state, reserves: 1000, publicDebt: 0 };
+    expect(canRepayDebt(state, 1)).toBe(false);
+    const next = repayDebt(state, 100);
+    expect(next.reserves).toBe(1000);
+    expect(next.publicDebt).toBe(0);
+  });
+
+  it("spends only the actual cost of paying off the remainder, not the full requested amount, when the request overshoots the remaining debt", () => {
+    let state = createInitialState();
+    state = { ...state, reserves: 1000, publicDebt: 1 }; // маленький остаток долга
+    const gdpAnnual = nationalGdpUsdAnnual(state);
+    const debtUsd = (1 / 100) * gdpAnnual; // фактическая стоимость погашения остатка
+
+    const next = repayDebt(state, 100); // Shift+ПКМ, $100 млрд запрошено
+    expect(next.publicDebt).toBeCloseTo(0, 6);
+    expect(next.reserves).toBeCloseTo(1000 - debtUsd, 6); // не 1000-100
   });
 });
 

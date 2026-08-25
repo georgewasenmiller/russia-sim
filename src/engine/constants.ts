@@ -2,7 +2,7 @@ import { REGIONS } from "../regions/data";
 import type { Region, RegionEconomy } from "../regions/types";
 import type { GameState, Industry, IndustryDef, IndustrySector } from "./types";
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const SAVE_KEY = "russia-sim-save-v1";
 
 export const CLAMP = {
@@ -339,11 +339,20 @@ export function computeJobsAndOutput(
   sector: IndustrySector,
   region: Region,
   economy: RegionEconomy,
+  alreadyCommittedJobs: number,
 ): { jobs: number; outputContribution: number } {
   const def = INDUSTRY_DEFS[sector];
   const laborForce = regionLaborForce(region);
-  const perBuilding = laborForce / maxProductionSlots(region, economy);
-  const jobs = Math.round(perBuilding * def.baseJobsShare);
+  const perBuilding = Math.round(
+    (laborForce / maxProductionSlots(region, economy)) * def.baseJobsShare,
+  );
+  // Ни одно здание не может нанять больше, чем реально осталось
+  // трудоспособного населения региона — alreadyCommittedJobs суммирует
+  // .jobs ВСЕХ его предприятий (включая ещё строящиеся, не только
+  // operational), чтобы параллельный старт нескольких строек тоже не мог
+  // совместно превысить laborForce.
+  const remainingCapacity = Math.max(laborForce - alreadyCommittedJobs, 0);
+  const jobs = Math.min(perBuilding, Math.round(remainingCapacity));
   const outputContribution = jobs * def.productivityPerWorker;
   return { jobs, outputContribution };
 }
@@ -408,7 +417,19 @@ function seedLegacyIndustries(region: Region): Industry[] {
     if (cumulativeJobs >= targetEmployment) break;
     const sector = sectors[i % sectors.length];
     const def = INDUSTRY_DEFS[sector];
-    const { jobs, outputContribution } = computeJobsAndOutput(sector, region, seedEconomy);
+    // Легаси-заполнение намеренно передаёт 0, а не cumulativeJobs: этот
+    // цикл уже останавливается сам по достижении targetEmployment (ниже
+    // laborForce) через отдельную "не перескочить через цель" проверку
+    // ниже, которая предполагает примерно ПОСТОЯННЫЙ размер шага. Если
+    // здесь же ограничивать jobs остатком до laborForce, шаги ближе к
+    // laborForce (а не к более низкой targetEmployment) начинают мельчать,
+    // проверка перестаёт срабатывать (мелкий шаг никогда не "перелетает"
+    // цель), и цикл вместо остановки у targetEmployment докручивает
+    // оставшиеся слоты почти до laborForce — искусственно занижая
+    // стартовую безработицу региона. Кап по laborForce нужен только для
+    // ПОСЛЕДУЮЩИХ построек игрока (см. industries.ts:startBuildingIndustry),
+    // не для этого отдельного, уже самоограничивающегося цикла.
+    const { jobs, outputContribution } = computeJobsAndOutput(sector, region, seedEconomy, 0);
     const wouldBe = cumulativeJobs + jobs;
     // Здания добавляются целыми штуками — если ОЧЕРЕДНОЕ здание перелетит
     // цель занятости заметно дальше, чем текущий недобор до неё, ближе к
