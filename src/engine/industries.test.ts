@@ -6,6 +6,7 @@ import {
   effectiveBuildDays,
   hasFreeInfrastructureSlot,
   hasFreeProductionSlot,
+  isSectorAlreadyBuilding,
   startBuildingIndustry,
   usedProductionSlots,
 } from "./industries";
@@ -69,6 +70,57 @@ describe("production slots", () => {
     expect(hasFreeInfrastructureSlot(state, region.id)).toBe(true);
     state = startBuildingIndustry(state, "infrastructure", region.id);
     expect(hasFreeInfrastructureSlot(state, region.id)).toBe(false);
+  });
+});
+
+describe("construction queue: at most one in-progress build per sector per region", () => {
+  it("refuses a second simultaneous build of the same sector, but allows a different sector in parallel", () => {
+    let state = withUnlimitedReserves(createInitialState());
+    const region = REGIONS_BY_ID.get("moscow")!;
+
+    state = startBuildingIndustry(state, "manufacturing", region.id);
+    expect(isSectorAlreadyBuilding(state, "manufacturing", region.id)).toBe(true);
+    expect(canBuildInRegion(state, "manufacturing", region.id)).toBe(false);
+
+    const countBefore = state.industries.filter(
+      (i) => i.regionId === region.id && i.sector === "manufacturing",
+    ).length;
+    const rejected = startBuildingIndustry(state, "manufacturing", region.id);
+    expect(
+      rejected.industries.filter((i) => i.regionId === region.id && i.sector === "manufacturing")
+        .length,
+    ).toBe(countBefore);
+
+    // Другой сектор в том же регионе — по-прежнему не блокируется.
+    expect(canBuildInRegion(state, "tech", region.id)).toBe(true);
+    const withTech = startBuildingIndustry(state, "tech", region.id);
+    expect(
+      withTech.industries.some(
+        (i) => i.regionId === region.id && i.sector === "tech" && i.status === "building",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows queuing another build of the same sector once the first one completes", () => {
+    let state = withUnlimitedReserves(createInitialState());
+    const region = REGIONS_BY_ID.get("moscow")!;
+
+    state = startBuildingIndustry(state, "manufacturing", region.id);
+    const first = state.industries.find(
+      (i) => i.regionId === region.id && i.sector === "manufacturing" && i.status === "building",
+    )!;
+    const completionDay = Math.ceil(first.completesAtGameDay);
+    const result = advanceConstruction(state.industries, completionDay);
+    state = { ...state, industries: result.industries };
+
+    expect(isSectorAlreadyBuilding(state, "manufacturing", region.id)).toBe(false);
+    expect(canBuildInRegion(state, "manufacturing", region.id)).toBe(true);
+    const next = startBuildingIndustry(state, "manufacturing", region.id);
+    expect(
+      next.industries.some(
+        (i) => i.regionId === region.id && i.sector === "manufacturing" && i.status === "building",
+      ),
+    ).toBe(true);
   });
 });
 

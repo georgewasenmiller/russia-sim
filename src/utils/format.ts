@@ -11,6 +11,15 @@ export function fmtUsdBn(value: number, digits = 1): string {
   return `$${value.toFixed(digits)} млрд`;
 }
 
+/** Суточный денежный поток бюджета: значение в $ млрд (как всё остальное
+ * в движке) переводится в $ млн — суточные величины на порядки меньше
+ * квартальных/годовых сумм, которыми оперирует fmtUsdBn, и теряли бы
+ * точность при округлении до 0.1 млрд. */
+export function fmtUsdMnPerDay(valueBn: number): string {
+  const sign = valueBn > 0 ? "+" : valueBn < 0 ? "−" : "";
+  return `${sign}$${Math.abs(valueBn * 1000).toFixed(0)} млн/день`;
+}
+
 /** Автомасштабирование млрд/трлн для крупных сумм (ВВП страны/региона). */
 export function fmtUsdAuto(valueBn: number, digits = 2): string {
   if (Math.abs(valueBn) >= 1000) {
@@ -59,4 +68,23 @@ export function metricColor(
   if (severity === "ok") return "text-emerald-400";
   if (severity === "warn") return "text-amber-400";
   return "text-rose-400";
+}
+
+/** Госдолг/ВВП% — отдельная 4-тиерная шкала (не 3-тиерный metricSeverity):
+ * до ~50% — нейтрально, 50-75% — жёлтый, 75-100% — оранжевый, 100%+ —
+ * красный (тревога). */
+export function debtRatioColorClass(pctOfGdp: number): string {
+  if (pctOfGdp < 50) return "text-emerald-400";
+  if (pctOfGdp < 75) return "text-amber-400";
+  if (pctOfGdp < 100) return "text-orange-400";
+  return "text-rose-400";
+}
+
+export function isDebtRatioCritical(pctOfGdp: number): boolean {
+  return pctOfGdp >= 100;
+}
+
+/** Инфраструктура региона как понятная шкала "X из 10" вместо сырых 0-100. */
+export function fmtInfraLevel(level: number): string {
+  return `${Math.round(level / 10)} из 10`;
 }

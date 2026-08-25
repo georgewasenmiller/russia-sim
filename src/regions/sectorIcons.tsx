@@ -13,3 +13,16 @@ export const SECTOR_ICON: Record<IndustrySector, LucideIcon> = {
   tech: Cpu,
   infrastructure: Hammer,
 };
+
+/**
+ * Короткие игровые названия для компактной панели плиток в RegionPanel —
+ * намеренно НЕ переиспользуют INDUSTRY_DEFS[sector].label (тот длиннее и
+ * используется в тултипах бюджета/карты, где место не так ограничено).
+ */
+export const BUILDING_FLAVOR_NAME: Record<IndustrySector, string> = {
+  oil_gas: "Нефтекомплекс",
+  manufacturing: "Завод",
+  agriculture: "Агрокомплекс",
+  tech: "IT-хаб",
+  infrastructure: "Инфраструктура",
+};

@@ -2,7 +2,6 @@ import {
   Activity,
   Banknote,
   Frown,
-  Gauge,
   Handshake,
   ShieldAlert,
   TrendingUp,
@@ -104,14 +103,6 @@ export function KpiCards() {
       fmtPct(state.socialUnrest, 0),
       state.socialUnrest,
       { good: 30, warn: 55 },
-      true,
-    ),
-    gauged(
-      <Gauge size={18} />,
-      "Госдолг",
-      fmtPct(state.publicDebt, 0),
-      state.publicDebt,
-      { good: 50, warn: 90 },
       true,
     ),
   ];

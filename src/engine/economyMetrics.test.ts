@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialState } from "./constants";
 import {
   industryObjectFlowUsd,
+  nationalDebtUsd,
   nationalGdpPerCapitaUsd,
   nationalGdpUsdAnnual,
   regionGdpPerCapitaUsd,
@@ -45,6 +46,13 @@ describe("economyMetrics: $ scale consistency", () => {
       (regionGdpUsdAnnual(economy) / region.population) * 1000,
       6,
     );
+  });
+
+  it("nationalDebtUsd stays consistent with state.publicDebt (debt/GDP ratio) and nationalGdpUsdAnnual", () => {
+    const state = createInitialState();
+    const debtUsd = nationalDebtUsd(state);
+    expect(debtUsd).toBeCloseTo((state.publicDebt / 100) * nationalGdpUsdAnnual(state), 6);
+    expect((debtUsd / nationalGdpUsdAnnual(state)) * 100).toBeCloseTo(state.publicDebt, 6);
   });
 
   it("region GDP at game start equals the sum of its legacy industries' individual $ contributions", () => {

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Coins,
+  CreditCard,
   Droplet,
   Landmark,
   Pause,
@@ -8,9 +9,18 @@ import {
   ScrollText,
   Sliders,
 } from "lucide-react";
+import { nationalDebtUsd } from "../engine/economyMetrics";
+import { computeBudget } from "../engine/formulas";
 import { GAME_SPEEDS, fmtGameDate, gameDateFromDays } from "../engine/time";
 import { useGame } from "../state/GameContext";
-import { fmtUsdBn } from "../utils/format";
+import { HoverTip } from "./ui/HoverTip";
+import {
+  debtRatioColorClass,
+  fmtUsdAuto,
+  fmtUsdBn,
+  fmtUsdMnPerDay,
+  isDebtRatioCritical,
+} from "../utils/format";
 
 export function TopBar({
   onOpenReforms,
@@ -27,6 +37,8 @@ export function TopBar({
 
   const canAdvance = !state.gameOver && !state.activeEvent;
   const gameDate = gameDateFromDays(state.gameTimeDays);
+  const dailyBudget = computeBudget(state, state.oilPrice, 1);
+  const debtUsd = nationalDebtUsd(state);
 
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
@@ -53,9 +65,10 @@ export function TopBar({
         <Stat
           icon={<Coins size={16} className="text-amber-400" />}
           label="Баланс бюджета"
-          value={`${state.budgetBalance >= 0 ? "+" : ""}${state.budgetBalance.toFixed(1)}% ВВП`}
-          tone={state.budgetBalance >= 0 ? "good" : "bad"}
+          value={fmtUsdMnPerDay(dailyBudget.balance)}
+          tone={dailyBudget.balance >= 0 ? "good" : "bad"}
         />
+        <DebtStat usdValue={debtUsd} pctOfGdp={state.publicDebt} />
         <Stat
           icon={<Droplet size={16} className="text-orange-400" />}
           label="Нефть"
@@ -138,6 +151,36 @@ export function TopBar({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Карточка госдолга: сумма в $ (как и раньше показывалась бы), но цвет
+ * текста/обводки считается по отношению долг/ВВП% (state.publicDebt),
+ * не по самой сумме — 4 тира вместо стандартного 2-тонового Stat. Точный
+ * процент виден только при наведении, в тултипе снизу.
+ */
+function DebtStat({ usdValue, pctOfGdp }: { usdValue: number; pctOfGdp: number }) {
+  const colorClass = debtRatioColorClass(pctOfGdp);
+  const critical = isDebtRatioCritical(pctOfGdp);
+  return (
+    <HoverTip label={`Госдолг: ${pctOfGdp.toFixed(0)}% ВВП`}>
+      <div
+        className={`flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
+          critical
+            ? "bg-slate-900 ring-2 ring-rose-500/60 shadow-[0_0_14px_rgba(244,63,94,0.35)]"
+            : "bg-slate-900"
+        }`}
+      >
+        <CreditCard size={16} className="text-fuchsia-400" />
+        <div className="flex flex-col leading-tight">
+          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+            Долг
+          </span>
+          <span className={`font-semibold ${colorClass}`}>{fmtUsdAuto(usdValue)}</span>
+        </div>
+      </div>
+    </HoverTip>
   );
 }
 

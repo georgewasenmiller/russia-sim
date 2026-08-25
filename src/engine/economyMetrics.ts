@@ -19,6 +19,15 @@ export function nationalGdpPerCapitaUsd(state: GameState): number {
   return (nationalGdpUsdAnnual(state) / TOTAL_POPULATION) * 1000;
 }
 
+/** Абсолютная сумма госдолга в $ млрд — state.publicDebt хранится как
+ * отношение долг/ВВП в процентах (см. turnEngine.ts), а не как сумма, так
+ * что сумма получается умножением на текущий (пересчитываемый каждые
+ * игровые сутки) годовой ВВП — автоматически согласована с самим
+ * отношением день в день. */
+export function nationalDebtUsd(state: GameState): number {
+  return (state.publicDebt / 100) * nationalGdpUsdAnnual(state);
+}
+
 export function regionGdpUsdAnnual(economy: RegionEconomy): number {
   return economy.gdpIndex * GDP_INDEX_SCALE * GDP_TO_USD_BN * 4;
 }

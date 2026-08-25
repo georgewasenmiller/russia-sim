@@ -137,11 +137,31 @@ export function hasFreeInfrastructureSlot(state: GameState, regionId: string): b
   return economy.infrastructureLevel + pendingGain < 100;
 }
 
+/**
+ * Не более одной стройки данного сектора одновременно в регионе — второе
+ * здание того же типа можно поставить в очередь только после завершения
+ * первого. Это правило порядка запуска стройки, не правило подсчёта:
+ * computeJobsAndOutput по-прежнему считает рабочие места/ВВП каждого
+ * здания независимо в момент старта, так что итоговое число зданий
+ * региона со временем не ограничивается — только темп параллельного
+ * запуска одного и того же типа.
+ */
+export function isSectorAlreadyBuilding(
+  state: GameState,
+  sector: IndustrySector,
+  regionId: string,
+): boolean {
+  return state.industries.some(
+    (i) => i.regionId === regionId && i.sector === sector && i.status === "building",
+  );
+}
+
 export function canBuildInRegion(
   state: GameState,
   sector: IndustrySector,
   regionId: string,
 ): boolean {
+  if (isSectorAlreadyBuilding(state, sector, regionId)) return false;
   return sector === "infrastructure"
     ? hasFreeInfrastructureSlot(state, regionId)
     : hasFreeProductionSlot(state, regionId);

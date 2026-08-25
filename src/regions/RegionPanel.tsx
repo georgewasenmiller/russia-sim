@@ -16,8 +16,16 @@ import {
 } from "../engine/industries";
 import { useGame } from "../state/GameContext";
 import type { GameState, IndustrySector } from "../engine/types";
-import { fmtRemainingDuration, fmtUsdAuto, fmtUsdBn, fmtUsdPerCapita } from "../utils/format";
+import {
+  fmtInfraLevel,
+  fmtRemainingDuration,
+  fmtUsdAuto,
+  fmtUsdBn,
+  fmtUsdPerCapita,
+} from "../utils/format";
+import { HoverTip } from "../components/ui/HoverTip";
 import { REGIONS } from "./data";
+import { BUILDING_FLAVOR_NAME, SECTOR_ICON } from "./sectorIcons";
 import type { Specialization } from "./types";
 
 const SPECIALIZATION_LABEL: Record<Specialization, string> = {
@@ -116,7 +124,7 @@ export function RegionPanel({
         <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${economy.corruptionIndex.toFixed(0)}/100`} />
         <Stat icon={<Landmark size={14} />} label="ВВП региона" value={fmtUsdAuto(regionGdpUsdAnnual(economy))} />
         <Stat icon={<Users size={14} />} label="ВВП на душу" value={fmtUsdPerCapita(regionGdpPerCapitaUsd(economy, region))} />
-        <Stat icon={<Hammer size={14} />} label="Инфраструктура" value={`${economy.infrastructureLevel.toFixed(0)}/100`} />
+        <Stat icon={<Hammer size={14} />} label="Инфраструктура" value={fmtInfraLevel(economy.infrastructureLevel)} />
         <Stat
           icon={<Factory size={14} />}
           label="Производственные слоты"
@@ -185,92 +193,82 @@ export function RegionPanel({
           <Factory size={13} /> Отрасли региона
         </h4>
 
-        {regionIndustries.length > 0 && (
-          <ul className="mb-3 flex flex-col gap-2">
-            {regionIndustries.map((ind) => (
-              <li
-                key={ind.id}
-                className="flex items-center justify-between rounded-md bg-slate-800/60 px-3 py-2 text-sm"
-              >
-                <span className="flex items-center gap-1.5 text-slate-200">
-                  {ind.label}
-                  {ind.origin === "legacy" && (
-                    <span
-                      className="rounded bg-slate-700/60 px-1 py-0.5 text-[10px] text-slate-400"
-                      title="Унаследовано от советской промышленной базы, не построено игроком"
-                    >
-                      советское наследие
-                    </span>
-                  )}
-                </span>
-                {ind.status === "building" ? (
-                  <div
-                    className="flex w-36 flex-col items-end gap-1"
-                    title={`Локальная инфраструктура региона: ×${ind.localInfraMultiplier.toFixed(2)} · Промышленная база страны: ×${ind.nationalMultiplier.toFixed(2)}`}
-                  >
-                    <span className="flex items-center gap-1 text-xs text-amber-400">
-                      <Hammer size={12} />
-                      {fmtRemainingDuration(ind.completesAtGameDay - state.gameTimeDays)}
-                    </span>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
-                      <div
-                        className="h-full bg-amber-400"
-                        style={{
-                          width: `${
-                            Math.min(
-                              1,
-                              Math.max(
-                                0,
-                                (state.gameTimeDays - ind.startedAtGameDay) /
-                                  Math.max(ind.completesAtGameDay - ind.startedAtGameDay, 1e-6),
-                              ),
-                            ) * 100
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <span className="text-emerald-400">
-                    работает · +{ind.jobs}тыс. раб. мест ·{" "}
-                    {fmtUsdBn(industryObjectFlowUsd(ind))}/год
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-5 gap-2">
           {(Object.keys(INDUSTRY_DEFS) as IndustrySector[]).map((sector) => {
-            const def = INDUSTRY_DEFS[sector];
-            const disabledReason = buildDisabledReason(state, sector, region.id);
-            return (
-              <button
-                key={sector}
-                type="button"
-                disabled={disabledReason !== null}
-                title={disabledReason ?? def.description}
-                onClick={() =>
-                  dispatch({
-                    type: "BUILD_INDUSTRY",
-                    sector,
-                    regionId: region.id,
-                  })
-                }
-                className="flex flex-col items-start gap-0.5 rounded-md border border-slate-700 bg-slate-800/40 px-3 py-2 text-left text-xs transition hover:border-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span className="text-sm font-medium text-slate-100">
-                  {def.label}
-                </span>
+            const Icon = SECTOR_ICON[sector];
+            const flavorName = BUILDING_FLAVOR_NAME[sector];
+            const sectorIndustries = regionIndustries.filter((i) => i.sector === sector);
+            const operational = sectorIndustries.filter((i) => i.status === "operational");
+            const building = sectorIndustries.find((i) => i.status === "building");
+
+            const disabledReason = building
+              ? `уже строится, ${fmtRemainingDuration(building.completesAtGameDay - state.gameTimeDays)}`
+              : buildDisabledReason(state, sector, region.id);
+
+            const countLabel = building
+              ? operational.length > 0
+                ? `${operational.length} шт. (+1 стр.)`
+                : "стр."
+              : `${operational.length} шт.`;
+
+            const progressPct = building
+              ? Math.min(
+                  1,
+                  Math.max(
+                    0,
+                    (state.gameTimeDays - building.startedAtGameDay) /
+                      Math.max(building.completesAtGameDay - building.startedAtGameDay, 1e-6),
+                  ),
+                ) * 100
+              : 0;
+
+            const totalJobs = totalOperationalJobs(operational);
+            const totalUsd = operational.reduce(
+              (sum, i) => sum + industryObjectFlowUsd(i),
+              0,
+            );
+
+            const tooltip = (
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium text-slate-100">{flavorName}</span>
+                {operational.length > 0 ? (
+                  <span>
+                    {operational.length} шт. · {totalJobs.toFixed(0)} тыс. раб. мест ·{" "}
+                    {fmtUsdBn(totalUsd)}/год
+                  </span>
+                ) : (
+                  <span>пока не построено</span>
+                )}
                 <span className="text-slate-400">
-                  {fmtUsdBn(effectiveBuildCost(state, sector, region.id))} ·{" "}
+                  Стройка: {fmtUsdBn(effectiveBuildCost(state, sector, region.id))} ·{" "}
                   {Math.round(effectiveBuildDays(state, sector, region.id))} дн.
                 </span>
-                {disabledReason && (
-                  <span className="text-[10px] text-rose-400">{disabledReason}</span>
-                )}
-              </button>
+                {disabledReason && <span className="text-rose-400">{disabledReason}</span>}
+              </div>
+            );
+
+            return (
+              <HoverTip key={sector} label={tooltip} className="w-full">
+                <button
+                  type="button"
+                  disabled={disabledReason !== null}
+                  onClick={() =>
+                    dispatch({ type: "BUILD_INDUSTRY", sector, regionId: region.id })
+                  }
+                  className="flex w-full flex-col items-center gap-1 rounded-md border border-slate-700 bg-slate-800/40 px-1.5 py-2 transition hover:border-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Icon size={20} className="text-slate-200" />
+                  <span className="text-[10px] font-medium text-slate-300">{countLabel}</span>
+                  {building && (
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700">
+                      <div
+                        className="h-full bg-amber-400"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  )}
+                </button>
+              </HoverTip>
             );
           })}
         </div>

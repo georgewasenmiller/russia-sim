@@ -23,7 +23,7 @@ import { SECTOR_ICON } from "./sectorIcons";
 import { groupIndustriesBySector } from "../engine/industries";
 import type { Industry, IndustrySector } from "../engine/types";
 import { useGame } from "../state/GameContext";
-import { fmtRemainingDuration } from "../utils/format";
+import { fmtInfraLevel, fmtRemainingDuration } from "../utils/format";
 
 export type MapMode = "economy" | "infrastructure";
 
@@ -394,7 +394,7 @@ export function RegionsMap({
         >
           <div className="mb-1 font-semibold text-slate-100">{tooltipRegion.name}</div>
           <div className="mb-1.5 text-slate-400">
-            Инфраструктура: {state.regionEconomies[tooltipRegion.id].infrastructureLevel.toFixed(0)}/100
+            Инфраструктура: {fmtInfraLevel(state.regionEconomies[tooltipRegion.id].infrastructureLevel)}
           </div>
           {Object.keys(tooltipGrouping.operational).length > 0 && (
             <div className="mb-1">
