@@ -23,12 +23,10 @@ import {
 } from "../utils/format";
 
 export function TopBar({
-  onOpenReforms,
   onOpenPolicy,
   onOpenCharts,
   onOpenBudget,
 }: {
-  onOpenReforms: () => void;
   onOpenPolicy: () => void;
   onOpenCharts: () => void;
   onOpenBudget: () => void;
@@ -103,15 +101,6 @@ export function TopBar({
           className="rounded-md border border-slate-700 bg-slate-900 p-2 text-slate-300 transition hover:border-violet-500 hover:text-white"
         >
           <Receipt size={18} />
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenReforms}
-          className="flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-violet-500 hover:text-white"
-        >
-          <ScrollText size={16} className="text-violet-400" />
-          Реформы
         </button>
 
         <div className="flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 p-1">

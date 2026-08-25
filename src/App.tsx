@@ -4,7 +4,6 @@ import { TopBar } from "./components/TopBar";
 import { KpiCards } from "./components/Dashboard/KpiCards";
 import { HistoryCharts } from "./components/Charts/HistoryCharts";
 import { PolicyPanel } from "./components/Sliders/PolicyPanel";
-import { ReformsPanel } from "./components/Reforms/ReformsPanel";
 import { EventModal } from "./components/Events/EventModal";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { GameOverScreen } from "./components/GameOverScreen";
@@ -15,7 +14,6 @@ import { RegionPanel } from "./regions/RegionPanel";
 
 type SidePanel =
   | { type: "region"; id: string }
-  | { type: "reforms" }
   | { type: "policy" }
   | { type: "charts" }
   | { type: "budget" }
@@ -50,7 +48,6 @@ function MainScreen() {
 
       <div className="shrink-0">
         <TopBar
-          onOpenReforms={() => setSidePanel({ type: "reforms" })}
           onOpenPolicy={() => setSidePanel({ type: "policy" })}
           onOpenCharts={() => setSidePanel({ type: "charts" })}
           onOpenBudget={() => setSidePanel({ type: "budget" })}
@@ -77,9 +74,6 @@ function MainScreen() {
           <aside className="w-80 shrink-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/95">
             {sidePanel.type === "region" && (
               <RegionPanel selectedId={sidePanel.id} onClose={closeSidePanel} />
-            )}
-            {sidePanel.type === "reforms" && (
-              <ReformsPanel onClose={closeSidePanel} />
             )}
             {sidePanel.type === "policy" && (
               <div className="flex h-full flex-col gap-2 overflow-y-auto p-4">

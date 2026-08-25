@@ -10,7 +10,6 @@ import {
 } from "react";
 import { createInitialState } from "../engine/constants";
 import { advanceOneDay } from "../engine/turnEngine";
-import { applyReform } from "../engine/reforms";
 import { resolveEventChoice } from "../engine/events";
 import { startBuildingIndustry } from "../engine/industries";
 import { changeTaxBurden, type TaxDirection } from "../engine/policy";
@@ -27,7 +26,6 @@ type Action =
   | { type: "SET_SLIDER"; slider: keyof Sliders; value: number }
   | { type: "CHANGE_TAX_BURDEN"; direction: TaxDirection }
   | { type: "BUILD_INDUSTRY"; sector: IndustrySector; regionId: string }
-  | { type: "APPLY_REFORM"; reformId: string }
   | { type: "RESOLVE_EVENT_CHOICE"; choiceId: string }
   | { type: "NEW_GAME" }
   | { type: "LOAD_GAME"; state: GameState };
@@ -55,8 +53,6 @@ function reducer(state: GameState, action: Action): GameState {
       return changeTaxBurden(state, action.direction);
     case "BUILD_INDUSTRY":
       return startBuildingIndustry(state, action.sector, action.regionId);
-    case "APPLY_REFORM":
-      return applyReform(state, action.reformId);
     case "RESOLVE_EVENT_CHOICE":
       return resolveEventChoice(state, action.choiceId);
     case "NEW_GAME":

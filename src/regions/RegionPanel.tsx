@@ -118,7 +118,6 @@ export function RegionPanel({
       </div>
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <Stat icon={<Landmark size={14} />} label="ВВП-индекс" value={economy.gdpIndex.toFixed(1)} />
         <Stat icon={<Users size={14} />} label="Население" value={`${region.population.toFixed(1)} млн`} />
         <Stat icon={<Factory size={14} />} label="Безработица" value={`${economy.unemploymentRate.toFixed(1)}%`} />
         <Stat icon={<ShieldAlert size={14} />} label="Коррупция" value={`${economy.corruptionIndex.toFixed(0)}/100`} />

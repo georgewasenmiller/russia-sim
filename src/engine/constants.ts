@@ -116,7 +116,7 @@ export const TUNING = {
     inflationDragThreshold: 12,
     inflationDragCoefficient: 0.004, // доля выпуска за п.п. инфляции выше порога
     unrestDragCoefficient: 0.0015, // доля выпуска за п.п. недовольства
-    corruptionDragCoefficient: 0.18, // доля выпуска при коррупции региона = 100
+    corruptionDragCoefficient: 0.55, // доля выпуска при коррупции региона = 100 (усилено — реальный разброс corruptionIndex по регионам всего 50-72, не 0-100, см. план "ВВП-индекс/коррупция/Реформы")
     oilSensitivityCoefficient: 0.003, // доля выпуска за $ отклонения цены нефти от целевой (только oil/gas регионы)
     agricultureReformDamping: 0.5, // множитель нацреформ для аграрных регионов
     agricultureStabilityFactor: 0.4, // множитель к noiseStdDev для аграрных регионов
